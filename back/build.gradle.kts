@@ -21,6 +21,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.hibernate.orm:hibernate-community-dialects")
     runtimeOnly("org.xerial:sqlite-jdbc:3.47.2.0")
     runtimeOnly("org.postgresql:postgresql")

@@ -8,7 +8,10 @@ node_modules/
 out/
 
 # env
-.env*
+.env
+.env.local
+.env.*.local
+!.env.example
 
 # sqlite (back/)
 back/data/

@@ -27,6 +27,17 @@ export function clearAuthToken() {
   sessionStorage.removeItem(ROLE_KEY);
 }
 
+/** EC2 nginx: /allohub/api , 로컬: /api */
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "/api";
+
+function resolveApiUrl(input: RequestInfo): RequestInfo {
+  if (typeof input !== "string") return input;
+  if (input.startsWith("/api")) {
+    return `${API_BASE}${input.slice(4)}`;
+  }
+  return input;
+}
+
 export async function apiFetch(
   input: RequestInfo,
   init?: RequestInit,
@@ -41,7 +52,7 @@ export async function apiFetch(
     headers.set("Content-Type", "application/json");
   }
 
-  return fetch(input, { ...init, headers });
+  return fetch(resolveApiUrl(input), { ...init, headers });
 }
 
 export type ApiSuccess<T> = {

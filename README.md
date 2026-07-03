@@ -1,75 +1,66 @@
 # AllocHub
 
-출자자 → 운용사 → 기업까지 자금이 흐르는 과정에서 **정합성을 유지하면서 각 단계를 자동으로 계산**하는 MVP 플랫폼입니다.
+출자자 → 운용사 → 기업까지 자금 흐름의 **정합성을 유지**하며 각 단계를 자동 계산하는 MVP입니다.
 
-## 프로젝트 구조
+## 구조
 
+```txt
+allohub/
+  front/          # Next.js UI (:3000, EC2: /allohub/)
+  back/           # Spring Boot API (:8080)
+  nginx/          # 리버스 프록시 (:80)
+  docker-compose.yml
+  .env.example
+  back/db/        # migration 복사본 + seed
 ```
-AlloHub_Portfolio/
-├── back/                 # Spring Boot API (Gradle, 포트 8080)
-│   ├── build.gradle.kts
-│   ├── data/             # SQLite DB (dev.db, test.db)
-│   └── src/main/java/com/allochub/
-├── front/                # Next.js UI (포트 3000)
-├── deploy/
-└── ops/
-```
 
-## 기술 스택
-
-| 영역 | 기술 |
-|------|------|
-| **back** | Spring Boot 3.4, Gradle, JPA, SQLite / PostgreSQL |
-| **front** | Next.js 16, React 19, Tailwind CSS 4 |
-| **테스트** | JUnit 5 (back), Vitest 제거 |
-
-## 시작하기
+## 로컬 개발
 
 ```bash
 npm install
-
-# API 서버 (Spring Boot)
-cd back && ./gradlew bootRun
-
-# UI (별도 터미널)
-npm run dev:front
-
-# 또는 동시 실행
-npm run dev
+cd back && ./gradlew bootRun   # :8080
+npm run dev:front              # :3000, /api → back rewrite
 ```
 
-| 서비스 | URL |
-|--------|-----|
-| UI | http://localhost:3000 |
-| API | http://localhost:8080/api/health |
+토큰: `operator-dev-token` / `admin-dev-token`
 
-로그인 토큰: `operator-dev-token` / `admin-dev-token`
+## EC2 배포 (MVP)
+
+순서: **`.env` → DB → Back → Front → Nginx → Actions**
+
+```bash
+# EC2
+cd /home/ubuntu
+git clone https://github.com/siren8289Porfolio/AlloHub_portfolio.git allohub
+cd allohub
+cp .env.example .env && nano .env
+
+docker compose up -d --build
+
+curl http://localhost:8080/actuator/health
+curl http://localhost/allohub/
+```
+
+데모 데이터 (전체 초기화 없음):
+
+```bash
+./back/db/scripts/seed-demo.sh
+```
+
+상세: [deploy/ec2/README.md](deploy/ec2/README.md)
+
+## GitHub Actions Secrets
+
+| Secret | 설명 |
+|--------|------|
+| `EC2_HOST` | EC2 퍼블릭 IP |
+| `EC2_USER` | `ubuntu` |
+| `EC2_SSH_KEY` | pem 전체 |
+
+`main` push → SSH → `docker compose up -d --build`
 
 ## 테스트
 
 ```bash
 cd back && ./gradlew test
-# 또는
-npm test
 ```
-
-## DB 위치
-
-SQLite 개발 DB: `back/data/dev.db`  
-테스트 DB: `back/data/test.db`
-
-PostgreSQL (Docker):
-
-```bash
-npm run docker:dev
-```
-
-## API 응답 형식
-
-```json
-{ "success": true, "data": {...}, "message": "요청이 성공했습니다." }
-{ "success": false, "errorCode": "INVALID_INPUT", "message": "..." }
-```
-
-배포: [deploy/README.md](deploy/README.md)  
-운영: [ops/README.md](ops/README.md)
