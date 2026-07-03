@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AllocHub
 
-## Getting Started
+출자자 → 운용사 → 기업까지 자금이 흐르는 과정에서 **정합성을 유지하면서 각 단계를 자동으로 계산**하는 MVP 플랫폼입니다.
 
-First, run the development server:
+## 프로젝트 구조
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+AlloHub_Portfolio/
+├── back/                 # Spring Boot API (Gradle, 포트 8080)
+│   ├── build.gradle.kts
+│   ├── data/             # SQLite DB (dev.db, test.db)
+│   └── src/main/java/com/allochub/
+├── front/                # Next.js UI (포트 3000)
+├── deploy/
+└── ops/
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 기술 스택
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| 영역 | 기술 |
+|------|------|
+| **back** | Spring Boot 3.4, Gradle, JPA, SQLite / PostgreSQL |
+| **front** | Next.js 16, React 19, Tailwind CSS 4 |
+| **테스트** | JUnit 5 (back), Vitest 제거 |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 시작하기
 
-## Learn More
+```bash
+npm install
 
-To learn more about Next.js, take a look at the following resources:
+# API 서버 (Spring Boot)
+cd back && ./gradlew bootRun
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# UI (별도 터미널)
+npm run dev:front
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# 또는 동시 실행
+npm run dev
+```
 
-## Deploy on Vercel
+| 서비스 | URL |
+|--------|-----|
+| UI | http://localhost:3000 |
+| API | http://localhost:8080/api/health |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+로그인 토큰: `operator-dev-token` / `admin-dev-token`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 테스트
+
+```bash
+cd back && ./gradlew test
+# 또는
+npm test
+```
+
+## DB 위치
+
+SQLite 개발 DB: `back/data/dev.db`  
+테스트 DB: `back/data/test.db`
+
+PostgreSQL (Docker):
+
+```bash
+npm run docker:dev
+```
+
+## API 응답 형식
+
+```json
+{ "success": true, "data": {...}, "message": "요청이 성공했습니다." }
+{ "success": false, "errorCode": "INVALID_INPUT", "message": "..." }
+```
+
+배포: [deploy/README.md](deploy/README.md)  
+운영: [ops/README.md](ops/README.md)

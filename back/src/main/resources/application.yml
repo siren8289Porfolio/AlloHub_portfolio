@@ -1,0 +1,25 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: allochub
+  datasource:
+    url: jdbc:sqlite:file:./data/dev.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+allochub:
+  auth:
+    operator-token: ${ALLOC_OPERATOR_TOKEN:operator-dev-token}
+    admin-token: ${ALLOC_ADMIN_TOKEN:admin-dev-token}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

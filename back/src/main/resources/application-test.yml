@@ -1,0 +1,6 @@
+spring:
+  datasource:
+    url: jdbc:sqlite:file:./data/test.db
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
