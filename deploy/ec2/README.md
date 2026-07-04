@@ -16,10 +16,14 @@ github actions
 
 ## 2. EC2 폴더
 
+서버 경로: **`/home/ubuntu/my-portfolio`** (다른 프로젝트와 동일)
+
 ```bash
-cd /home/ubuntu
-git clone https://github.com/siren8289Porfolio/AlloHub_portfolio.git allohub
-cd allohub
+cd /home/ubuntu/my-portfolio
+# AlloHub 코드가 이 디렉터리(또는 하위)에 있어야 함
+ls -al
+docker compose config --services
+# 기대: db, allohub-app, allohub-web, nginx
 ```
 
 ## 3. `.env` 먼저
@@ -65,12 +69,12 @@ docker compose up -d db
 docker compose logs -f db
 
 # 6. Back (Flyway V1 적용)
-docker compose up -d back
-docker compose logs -f back
+docker compose up -d allohub-app
+docker compose logs -f allohub-app
 
 # 7. Front
-docker compose up -d front
-docker compose logs -f front
+docker compose up -d allohub-web
+docker compose logs -f allohub-web
 
 # 8. Nginx
 docker compose up -d nginx
@@ -81,6 +85,13 @@ docker compose logs -f nginx
 
 ```bash
 docker compose up -d --build
+```
+
+Actions 배포(앱만 갱신):
+
+```bash
+docker compose pull allohub-app allohub-web
+docker compose up -d allohub-app allohub-web
 ```
 
 ## 9. 헬스체크
@@ -115,14 +126,16 @@ Repo → Settings → Secrets and variables → Actions:
 | `EC2_USER` | `ubuntu` |
 | `EC2_SSH_KEY` | pem **전체** 내용 |
 
-`main` push 시:
+`main` push 시 (debug 로그 포함):
 
 ```bash
-cd /home/ubuntu/allohub
-git reset --hard origin/main
-docker compose up -d --build
-docker image prune -f
+cd /home/ubuntu/my-portfolio
+docker compose config --services
+docker compose pull allohub-app allohub-web
+docker compose up -d allohub-app allohub-web
 ```
+
+서비스명이 다르면 EC2에서 `docker compose config --services` 결과를 workflow에 그대로 반영.
 
 ## 보안 그룹
 
@@ -135,8 +148,8 @@ docker image prune -f
 ## 롤백
 
 ```bash
-cd /home/ubuntu/allohub
+cd /home/ubuntu/my-portfolio
 git log --oneline -5
 git reset --hard <이전-커밋>
-docker compose up -d --build
+docker compose up -d allohub-app allohub-web
 ```

@@ -29,12 +29,11 @@ npm run dev:front              # :3000, /api → back rewrite
 순서: **`.env` → DB → Back → Front → Nginx → Actions**
 
 ```bash
-# EC2
-cd /home/ubuntu
-git clone https://github.com/siren8289Porfolio/AlloHub_portfolio.git allohub
-cd allohub
+# EC2 — 경로: /home/ubuntu/my-portfolio
+cd /home/ubuntu/my-portfolio
 cp .env.example .env && nano .env
 
+docker compose config --services   # allohub-app, allohub-web 확인
 docker compose up -d --build
 
 curl http://localhost:8080/actuator/health

@@ -1,6 +1,7 @@
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST:db}:${DB_PORT:5432}/${DB_NAME:allohub}
+    # DB_HOST=db (compose service name)
     username: ${DB_USER:allohub}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver

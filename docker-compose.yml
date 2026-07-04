@@ -1,8 +1,9 @@
 # AlloHub MVP — EC2: /home/ubuntu/my-portfolio
-# 순서: allohub-db → allohub-app → allohub-web → nginx
+# 서비스명: allohub-app (back), allohub-web (front)
+# 순서: db → allohub-app → allohub-web → nginx
 
 services:
-  allohub-db:
+  db:
     image: postgres:14-alpine
     container_name: allohub-db
     restart: unless-stopped
@@ -25,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: back/Dockerfile
-    image: allohub-app:latest
+    image: allohub-back:latest
     container_name: allohub-app
     restart: unless-stopped
     ports:
@@ -33,7 +34,7 @@ services:
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
-      DB_HOST: allohub-db
+      DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-allohub}
       DB_USER: ${DB_USER:-allohub}
@@ -42,7 +43,7 @@ services:
       ALLOC_ADMIN_TOKEN: ${ALLOC_ADMIN_TOKEN:-admin-dev-token}
       PORT: 8080
     depends_on:
-      allohub-db:
+      db:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -61,7 +62,7 @@ services:
         NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/allohub}
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/allohub/api}
         BACKEND_URL: ${BACKEND_URL:-http://allohub-app:8080}
-    image: allohub-web:latest
+    image: allohub-front:latest
     container_name: allohub-web
     restart: unless-stopped
     environment:

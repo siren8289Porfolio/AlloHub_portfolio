@@ -63,43 +63,19 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
+          debug: true
           script: |
-            set -euo pipefail
-
-            DEPLOY_DIR="/home/${{ secrets.EC2_USER }}/my-portfolio"
-            cd "$DEPLOY_DIR"
-
-            # AlloHub 소스가 하위 폴더인 경우 (없으면 my-portfolio 루트)
-            if [ -d AlloHub_portfolio ]; then
-              APP_DIR="$DEPLOY_DIR/AlloHub_portfolio"
-            elif [ -d allohub ]; then
-              APP_DIR="$DEPLOY_DIR/allohub"
-            else
-              APP_DIR="$DEPLOY_DIR"
-            fi
-            cd "$APP_DIR"
-            echo "Deploy dir: $APP_DIR"
-
-            if [ ! -f .env ]; then
-              echo "ERROR: $APP_DIR/.env 가 없습니다. EC2에서 먼저 .env 를 만드세요."
-              exit 1
-            fi
-
-            if [ -d .git ]; then
-              git fetch origin main
-              git reset --hard origin/main
-            else
-              echo "WARN: $APP_DIR 가 git 저장소가 아닙니다. 현재 파일로 compose만 재기동합니다."
-            fi
-
-            # DB/nginx는 유지, 앱만 재빌드 (없으면 기동)
-            docker compose up -d allohub-db || true
-            docker compose up -d --build allohub-app allohub-web
-            docker compose up -d nginx || true
-            docker image prune -f
-
-            echo "Waiting for health..."
-            sleep 20
-            curl -sf http://localhost:8080/actuator/health || curl -sf http://localhost/health || true
-            curl -sf http://localhost/allohub/ >/dev/null
+            set -euxo pipefail
+            pwd
+            whoami
+            ls -al /home/${{ secrets.EC2_USER }}
+            cd /home/${{ secrets.EC2_USER }}/my-portfolio
+            git status
+            docker compose config --services
             docker compose ps
+            docker compose pull allohub-app allohub-web
+            docker compose up -d allohub-app allohub-web
+            docker compose ps
+            sleep 15
+            curl -sf http://localhost:8080/actuator/health || curl -sf http://localhost/health || true
+            curl -sf http://localhost/allohub/ || true
