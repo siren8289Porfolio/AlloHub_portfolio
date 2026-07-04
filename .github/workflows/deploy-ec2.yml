@@ -8,6 +8,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: allohub_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +40,10 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
-      - name: Backend tests
+      - name: Backend tests (PostgreSQL)
         run: cd back && chmod +x gradlew && ./gradlew test
+        env:
+          SPRING_PROFILES_ACTIVE: test
 
       - name: Frontend build (local paths)
         run: npm run build -w front

@@ -59,8 +59,15 @@ curl http://localhost/allohub/
 
 `main` push → SSH → `docker compose up -d --build`
 
-## 테스트
+## 테스트 (PostgreSQL)
+
+운영과 동일하게 **PostgreSQL**로 통합 테스트합니다. (SQLite 테스트 제거)
 
 ```bash
+# 로컬 (호스트 5432가 점유된 경우 5433)
+npm run test:pg
+
+# CI: GitHub Actions services.postgres (localhost:5432)
 cd back && ./gradlew test
 ```
+
