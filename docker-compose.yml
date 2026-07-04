@@ -1,8 +1,8 @@
-# AlloHub MVP — EC2: /home/ubuntu/allohub
-# 순서: db → back → front → nginx
+# AlloHub MVP — EC2: /home/ubuntu/my-portfolio
+# 순서: allohub-db → allohub-app → allohub-web → nginx
 
 services:
-  db:
+  allohub-db:
     image: postgres:14-alpine
     container_name: allohub-db
     restart: unless-stopped
@@ -21,19 +21,19 @@ services:
     networks:
       - allohub
 
-  back:
+  allohub-app:
     build:
       context: .
       dockerfile: back/Dockerfile
-    image: allohub-back:latest
-    container_name: allohub-back
+    image: allohub-app:latest
+    container_name: allohub-app
     restart: unless-stopped
     ports:
       - "8080:8080"
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
-      DB_HOST: db
+      DB_HOST: allohub-db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-allohub}
       DB_USER: ${DB_USER:-allohub}
@@ -42,7 +42,7 @@ services:
       ALLOC_ADMIN_TOKEN: ${ALLOC_ADMIN_TOKEN:-admin-dev-token}
       PORT: 8080
     depends_on:
-      db:
+      allohub-db:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
@@ -53,25 +53,25 @@ services:
     networks:
       - allohub
 
-  front:
+  allohub-web:
     build:
       context: .
       dockerfile: front/Dockerfile
       args:
         NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/allohub}
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/allohub/api}
-        BACKEND_URL: ${BACKEND_URL:-http://back:8080}
-    image: allohub-front:latest
-    container_name: allohub-front
+        BACKEND_URL: ${BACKEND_URL:-http://allohub-app:8080}
+    image: allohub-web:latest
+    container_name: allohub-web
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-/allohub}
       NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/allohub/api}
-      BACKEND_URL: ${BACKEND_URL:-http://back:8080}
+      BACKEND_URL: ${BACKEND_URL:-http://allohub-app:8080}
       PORT: 3000
       HOSTNAME: 0.0.0.0
     depends_on:
-      back:
+      allohub-app:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/allohub/"]
@@ -91,9 +91,9 @@ services:
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      front:
+      allohub-web:
         condition: service_healthy
-      back:
+      allohub-app:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/allohub/"]
