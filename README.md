@@ -104,6 +104,158 @@ SRS의 `조회 p95 1초`, `계산 500ms`, `가용성 99.5%`는 **검증 전 목�
 - PostgreSQL Transaction Isolation
 - OWASP ASVS
 
+## 운영 원장 중심 Data Engineering 설계
+
+> **프로젝트:** AlloHub / AllocHub · **분류:** DE · **상태:** 운영 원장 중심 Data Engineering 설계
+
+MVP 원장은 정합성 보장이 우선이며, 분석용 pipeline은 운영 DB와 분리한다.
+
+### 1. Data Engineering 목표
+
+AllocHub의 DE 목표는 단순 ETL 구축이 아니라 **자금 원장의 재현성, 정합성, lineage를 유지하면서 분석/QA가 안전하게 소비할 수 있는 데이터 경로**를 만드는 것이다.
+
+기본 흐름은 다음과 같다.
+
+```mermaid
+flowchart LR
+    A["PostgreSQL OLTP"] --> B["Immutable Raw / Snapshot"]
+    B --> C["Validation"]
+    C --> D["Normalized / Conformed"]
+    D --> E["Finance & Reconciliation Mart"]
+    E --> F["DA / QA / Reporting"]
+```
+
+### 2. Source와 Grain
+
+운영 source는 `Investor`, `Investment`, `InvestorInvestment`, `Distribution`, `DistributionDetail`, `AuditLog`다.
+
+각 dataset은 grain을 명시한다.
+
+| Dataset | Grain |
+| --- | --- |
+| `Investor` | 출자자 1행 |
+| `Investment` | 기업 투자 건 1행 |
+| `InvestorInvestment` | 투자 x 출자자 1행 |
+| `Distribution` | 배분 원장 건 1행 |
+| `DistributionDetail` | 배분 x 출자자 1행 |
+| `AuditLog` | 변경 event 1행 |
+
+모든 downstream table은 source id, business date/event time, extracted_at, schema_version을 보존한다.
+
+### 3. Ingestion
+
+MVP 규모에서는 batch snapshot 또는 증분 추출로 시작한다. 증분 기준은 `updated_at` 또는 안정적인 monotonic key를 사용하되 delete 처리 전략을 별도 정의한다.
+
+재실행 시 동일 데이터가 중복 생성되지 않도록 pipeline task는 idempotent하게 설계한다. backfill은 처리 기간과 source snapshot을 고정하고 이미 확정된 결과를 조용히 덮어쓰지 않는다.
+
+### 4. Raw / Staging / Curated
+
+| Layer | 원칙 |
+| --- | --- |
+| Raw | source 형태를 최대한 보존하고 수집 시각, source PK, schema version 기록 |
+| Staging | type 정규화, NULL/중복/참조 무결성 검사 |
+| Curated | investor/investment/distribution 관계를 conformed key로 연결 |
+| Mart | reconciliation, cash flow, distribution accuracy 등 분석 목적 집계 |
+
+운영 원장을 mart로 대체하지 않는다. 운영 write authority는 PostgreSQL OLTP에 유지한다.
+
+### 5. Data Quality Rules
+
+핵심 DQ는 business invariant와 직접 연결한다.
+
+- PK NULL/duplicate = 0
+- FK orphan = 0
+- 금액 < 0 금지
+- 배분비율 허용범위 검증
+- `sum(InvestorInvestment) = Investment.amount`
+- `sum(DistributionDetail) = Distribution.amount`
+- `total contribution = investment + cash` 불변식 검증
+- source row count와 curated row count 차이는 명시한 filtering 규칙으로 설명 가능해야 함
+
+실패 시 dataset을 quarantine하거나 pipeline을 fail하고 잘못된 mart를 publish하지 않는다.
+
+### 6. Schema Change / Contract
+
+Producer 변경은 column add/drop/type change를 분류하고 Consumer 호환성을 확인한다. schema version과 migration id를 metadata에 남긴다.
+
+Breaking change는 staging validation과 downstream test 통과 후 반영하며, silently cast하여 오류를 숨기지 않는다.
+
+### 7. Orchestration
+
+Airflow를 사용하는 경우 DAG task는 deterministic input/output을 갖고 retry가 결과를 중복시키지 않아야 한다. source extraction, validation, transform, publish를 분리해 failure domain을 명확히 한다.
+
+필수 운영 메타데이터는 다음과 같다.
+
+- run_id
+- logical/data interval
+- source snapshot
+- code/schema version
+- row count
+- DQ status
+- retry count
+- started/finished time
+
+### 8. Serving
+
+DA/QA에는 운영 Entity를 그대로 노출하기보다 분석 grain이 명확한 mart를 제공한다.
+
+- `fact_investment_allocation`
+- `fact_distribution_allocation`
+- `fact_reconciliation_check`
+- `dim_investor`
+- `dim_company`
+- `dim_date`
+
+mart 계산식은 DA metric definition과 동일한 source of truth를 사용한다.
+
+### 9. Monitoring
+
+pipeline success rate, freshness, row-count anomaly, DQ failure, reconciliation mismatch, late data, schema drift를 감시한다. 장애 원인은 run_id로 raw -> curated -> mart까지 추적 가능해야 한다.
+
+### 10. 공식문서
+
+- AWS Data Architecture
+- AWS Data Engineering
+- Apache Airflow Best Practices
+- dbt Data Tests
+- PostgreSQL Constraints
+- PostgreSQL Indexes
+
+### External Reference Data Pipeline
+
+#### Source
+
+- KVIC 모태펀드 자조합 운용사: 연간 snapshot 성격의 Fund/GP reference
+- 금융위원회 KRX 상장종목정보: Company master, 일 단위 갱신 기준
+- OpenDART: 기업개황, 공시, 재무/주요사항 reference
+
+#### Pipeline
+
+```text
+extract -> raw snapshot -> schema validation -> normalize -> identity matching -> reference tables -> serving
+```
+
+- raw는 원본 보존 및 재처리를 위해 immutable snapshot으로 관리한다.
+- `source + source_key + reference_date` 기준 idempotent 적재를 적용한다.
+- KRX와 DART 기업 식별자는 법인등록번호, 종목코드 등 사용 가능한 key를 우선하며 불일치는 DQ 대상으로 격리한다.
+- 공시 데이터는 append 중심으로 관리하고 중복 report_no를 방지한다.
+- 수집 실패 시 내부 ledger는 정상 동작하며 외부 reference의 freshness 상태만 degraded 처리한다.
+
+#### Data Quality
+
+- company master duplicate rate
+- KRX/DART match rate
+- null identifier rate
+- stale reference count
+- corporate event duplicate rate
+- source row count / normalized row count reconciliation
+
+#### 공식 데이터
+
+- https://www.data.go.kr/data/3060708/fileData.do?recommendDataYn=Y
+- https://www.data.go.kr/data/15094775/openapi.do
+- https://opendart.fss.or.kr/intro/main.do
+
 ---
 
 ## 1. 핵심 한 줄
