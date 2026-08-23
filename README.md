@@ -256,6 +256,171 @@ extract -> raw snapshot -> schema validation -> normalize -> identity matching -
 - https://www.data.go.kr/data/15094775/openapi.do
 - https://opendart.fss.or.kr/intro/main.do
 
+## ML - Investment Anomaly Detection Feasibility Specification
+
+> **상태:** CONDITIONAL / PROPOSED / NOT IMPLEMENTED / NOT TESTED
+
+> **적용 경계:** AlloHub의 현재 핵심은 출자, 투자, 배분 원장의 정합성과 감사 가능성이다. ML은 기존 정합성 규칙을 대체하지 않고, 충분한 운영 데이터가 축적된 뒤 사람이 검토할 이상 후보의 우선순위를 보조하는 경우에만 검토한다.
+
+### 1. Document Overview
+
+- 관련 기준 문서: PRD_v0, SRS_v0, SDD_v0, DE - Data Engineering Specification, DA - Data Analytics Specification, QA - QA/QC Specification
+- 현재 운영 source: `Investor`, `Investment`, `InvestorInvestment`, `Distribution`, `DistributionDetail`, `AuditLog`
+- 외부 enrichment 후보: KVIC, KRX, OpenDART
+- 현재 ML 모델 구현 증거: 없음
+
+### 2. Problem Definition
+
+#### 2.1 Non-ML Goal
+
+투자/배분 데이터의 불일치나 비정상 패턴을 빠르게 찾아 운영자가 검토할 수 있게 한다.
+
+#### 2.2 Why ML Is Conditional
+
+현재 AlloHub에는 이미 다음과 같은 결정적 정합성 규칙이 존재한다.
+
+- 투자금 배분 합계 = `Investment.amount`
+- 배분 상세 합계 = `Distribution.amount`
+- `AuditLog`로 변경 이력 추적
+
+이런 규칙으로 확정 가능한 오류는 ML보다 rule-based validation이 우선이다. ML은 규칙으로 명확히 정의하기 어려운 패턴이 충분히 축적되고, 모델이 기존 rule baseline보다 실질적인 검토 효율을 개선할 때만 적용한다.
+
+### 3. Intended ML Use Case
+
+후보 task는 **anomaly ranking / review prioritization**이다.
+
+모델이 할 수 있는 일은 다음과 같다.
+
+- 거래/배분 패턴 중 과거와 다른 후보 점수화
+- 반복 수정 또는 비정상적인 `AuditLog` 패턴 탐색
+- 검토 대상 우선순위 제안
+
+모델이 하면 안 되는 일은 다음과 같다.
+
+- `Investment`/`Distribution` 금액 자동 수정
+- 원장 정합성 규칙 무시
+- 투자 적합성 또는 수익성 자동 판정
+- 사람 승인 없이 업무 상태 변경
+
+### 4. Data Feasibility Gate
+
+ML 실험은 다음 조건을 만족한 뒤 시작한다.
+
+1. 충분한 기간의 `Investment` / `Distribution` / `AuditLog` 이력 확보
+2. 정상/오류/수정 사례를 구분할 수 있는 검토 결과 또는 proxy label 확보
+3. 학습 시점과 추론 시점에 동일하게 사용할 수 있는 feature 확인
+4. 데이터 누락, 중복, 시간 기준 정합성 검증 완료
+
+조건을 충족하지 못하면 **NO-ML**을 유지한다.
+
+### 5. Baseline
+
+Rule baseline은 다음을 기준으로 한다.
+
+- allocation sum mismatch
+- distribution detail sum mismatch
+- 비정상 상태 전이
+- `AuditLog` 변경 횟수/빈도 threshold
+- reconciliation 결과
+
+ML 후보는 반드시 이 baseline보다 추가적인 검토 가치가 있는지 비교한다.
+
+### 6. Candidate Features
+
+데이터가 충분할 때만 다음을 검토한다.
+
+- investment amount / distribution amount
+- investor별 allocation 비율
+- distribution ratio
+- transaction 간 시간 간격
+- `AuditLog` 변경 빈도
+- 동일 레코드 반복 수정 횟수
+- reconciliation 결과
+- company master match 여부
+
+미래 정보나 사후 검토 결과가 학습 feature에 섞이지 않도록 leakage를 점검한다.
+
+### 7. Candidate Models
+
+첫 실험은 복잡한 DL이 아니라 단순한 모델부터 시작한다.
+
+- heuristic / statistical threshold
+- Isolation Forest 등 unsupervised baseline
+- label 확보 시 Logistic Regression / Tree-based classifier 후보
+
+현재 단계에서 특정 알고리즘을 최종 모델로 확정하지 않는다.
+
+### 8. Evaluation
+
+모델 metric과 업무 success metric을 분리한다.
+
+#### Model Evaluation Candidate
+
+- Precision / Recall / F1: label이 있는 분류 문제로 전환 가능한 경우
+- Precision@K: 상위 검토 후보 품질
+- false-positive rate
+
+#### Business Success Candidate
+
+- 검토자가 확인해야 하는 건수 감소
+- 실제 오류 후보 발견율 개선
+- 평균 검토 시간 감소
+
+구체적인 acceptance threshold는 실제 dataset과 baseline 측정 전까지 **TBD**다.
+
+### 9. Serving & Human Decision Boundary
+
+권장 구조는 다음과 같다.
+
+```text
+Operational DB -> validated feature dataset -> anomaly scoring -> review queue -> human review
+```
+
+ML 결과는 Evidence/Signal이며 최종 원장 데이터가 아니다. 모델 실패 시 기존 rule-based reconciliation과 수동 검토 흐름으로 fallback한다.
+
+### 10. Monitoring
+
+실제 도입 시 다음을 추적한다.
+
+- input data quality
+- feature distribution 변화
+- anomaly score distribution
+- false-positive / false-negative feedback
+- inference failure
+- model version
+
+### 11. Decision Gate
+
+다음 중 하나라도 충족하지 못하면 ML을 production 범위에 넣지 않는다.
+
+- 충분하고 신뢰 가능한 데이터
+- prediction-time feature availability
+- rule baseline 대비 유의미한 개선
+- 운영자가 결과에 따라 취할 수 있는 명확한 action
+- 유지/모니터링 비용을 정당화할 업무 효과
+
+### 12. Evidence & Status
+
+| 항목 | 상태 |
+| --- | --- |
+| Rule-based reconciliation | 기존 설계에 존재 |
+| ML use case | PROPOSED |
+| Training dataset | NOT VERIFIED |
+| Label / ground truth | NOT VERIFIED |
+| Model training | NOT IMPLEMENTED |
+| Evaluation | NOT TESTED |
+| Serving | NOT IMPLEMENTED |
+| Monitoring | DESIGNED ONLY |
+
+### 13. Official References
+
+- Google for Developers - Introduction to Machine Learning Problem Framing: https://developers.google.com/machine-learning/problem-framing
+- Google for Developers - Understand the problem: https://developers.google.com/machine-learning/problem-framing/problem
+- Google for Developers - Framing an ML problem: https://developers.google.com/machine-learning/problem-framing/ml-framing
+- Google for Developers - Implementing a model: https://developers.google.com/machine-learning/problem-framing/implement-model
+
+> **결론:** AlloHub의 ML은 필수 기능이 아니다. 현재는 rule-based reconciliation이 기준이며, 운영 데이터가 충분히 축적되고 ML이 baseline보다 실제 검토 효율을 높인다는 증거가 생길 때만 anomaly detection/ranking을 확장한다.
+
 ---
 
 ## 1. 핵심 한 줄
