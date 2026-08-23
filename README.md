@@ -221,6 +221,14 @@ pipeline success rate, freshness, row-count anomaly, DQ failure, reconciliation 
 - PostgreSQL Constraints
 - PostgreSQL Indexes
 
+### 현재 실행 가능 산출물
+
+- `back/db/analytics/01_quality_checks.sql`: PK/FK orphan, 금액 음수, 투자/배분 detail 합계, 현금잔고, 비율 합계 DQ check
+- `back/db/analytics/02_analytics_marts.sql`: `analytics.dim_investor`, `analytics.dim_company`, `analytics.dim_date`, `analytics.fact_investment_allocation`, `analytics.fact_distribution_allocation`, `analytics.fact_reconciliation_check` view
+- `back/db/analytics/README.md`: 실행 순서와 운영 원장/분석 mart 경계
+
+이 산출물은 운영 write authority를 변경하지 않고, PostgreSQL OLTP 원장을 source로 읽어 DA/QA/reporting용 mart와 DQ evidence를 제공한다.
+
 ### External Reference Data Pipeline
 
 #### Source
