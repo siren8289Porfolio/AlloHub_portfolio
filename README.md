@@ -1,4 +1,110 @@
-# AlloHub 
+# AlloHub
+
+## MVP 백엔드 설계 기준
+
+> **프로젝트:** AlloHub / AllocHub · **분류:** BE · **상태:** PRD/SRS/SDD 기반 설계 통합본
+
+현재 MVP의 핵심은 출자금, 기업 투자, 배분금의 **금액 정합성과 추적 가능성**이다. 확인되지 않은 성능이나 구현 결과는 사실로 쓰지 않는다.
+
+### 1. 목적과 범위
+
+상위 기준은 `PRD_v0 -> SRS_v0 -> SDD_v0`이다. MVP 백엔드는 출자자 등록, 기업 투자 등록과 자동 배분, 배분금 등록과 자동 계산, 정합성 조회, Audit Log를 일관된 transaction boundary에서 처리한다.
+
+PRD의 핵심 불변식은 **총 출자금 = 기업 투자금 + 현금**, **배분 상세 합계 = 배분 원금**이다. 따라서 Controller, Service, Repository 분리는 단순 계층화가 아니라 계산, 검증, 저장을 한 트랜잭션으로 묶기 위한 책임 분리로 사용한다.
+
+### 2. 도메인 경계
+
+| 도메인 | 책임 |
+| --- | --- |
+| `Investor` | 출자자, 출자금, 배분비율 관리 |
+| `Investment` | 기업 투자 원장 |
+| `InvestorInvestment` | 투자 건별 출자자 배분 결과 |
+| `Distribution` | 배당금/회수금 원장 |
+| `DistributionDetail` | 출자자별 배분 상세 |
+| `Reconciliation` | 자금 흐름 불변식 검증 |
+| `AuditLog` | 주요 변경 이력 |
+
+`Reconciliation`은 단순 조회 유틸이 아니라 투자/배분 write path의 검증 규칙으로 취급한다.
+
+### 3. API 계약
+
+SRS의 API를 상위 계약으로 사용한다.
+
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| `POST` | `/api/investors` | 출자자 등록 |
+| `GET` | `/api/investors` | 출자자 목록 조회 |
+| `PUT` | `/api/investors/{id}` | 출자자 수정 |
+| `POST` | `/api/investments` | 투자 등록 + 출자자별 자동 배분 |
+| `GET` | `/api/reconciliation` | 정합성 상태 조회 |
+| `POST` | `/api/distributions` | 배분금 등록 |
+| `POST` | `/api/distributions/calculate` | 배분액 계산 |
+| `GET` | `/api/distributions` | 배분 이력 조회 |
+
+OpenAPI 문서는 request/response schema, validation error, `401/403/409`, business-rule error를 구현과 동일하게 유지한다. 명세와 실제 endpoint 불일치를 release gate로 둔다.
+
+### 4. Transaction 및 동시성
+
+투자 등록 시 `Investment 생성 -> InvestorInvestment 계산/저장 -> 정합성 확인 -> AuditLog`가 하나의 atomic unit이어야 한다. 배분 등록도 `Distribution -> DistributionDetail -> 합계 검증 -> 원장 확정`을 같은 transaction으로 묶는다.
+
+동시 요청으로 동일 원장을 이중 반영하지 않도록 business key/unique constraint와 transaction isolation을 함께 검토한다. 재시도 가능한 API라면 idempotency key 또는 중복 방지 키를 설계한다.
+
+### 5. 금액 계산 원칙
+
+금융성 금액은 부동소수 오차를 피하도록 DB의 exact numeric/decimal 또는 정수 최소단위를 사용한다. SRS의 "마지막 출자자 소수점 조정" 규칙은 계산 순서, 반올림 모드, 잔여액 처리 규칙을 코드와 테스트에 고정한다.
+
+검증식은 다음을 기준으로 한다.
+
+```text
+sum(investor_investment.allocated_amount) = investment.amount
+sum(distribution_detail.amount) = distribution.amount
+total_contribution = total_investment + cash_balance
+```
+
+### 6. Validation / Exception
+
+| 상황 | 응답 기준 |
+| --- | --- |
+| 필수값 누락, 금액 <= 0 | `400` |
+| 중복 business key | `409` |
+| 총 출자금 초과 투자 | business validation failure |
+| 비율 합계 규칙 위반 | 요청 거절 |
+| 인증 없음 | `401` |
+| 권한 없음 | `403` |
+
+예외 응답은 공통 error code, message, trace/correlation id를 갖게 하고 내부 stack trace를 외부에 노출하지 않는다.
+
+### 7. Security / Audit
+
+운용사와 관리자 권한을 구분하고 최소 권한을 적용한다. 투자와 배분 변경은 actor, action, entity, before/after 또는 변경 요약, timestamp를 AuditLog에 남긴다. 민감정보는 로그에 원문으로 과도하게 남기지 않는다.
+
+### 8. Performance / Operations
+
+SRS의 `조회 p95 1초`, `계산 500ms`, `가용성 99.5%`는 **검증 전 목표값**으로 취급한다. 부하테스트, APM, DB plan 증거가 없으면 달성했다고 표현하지 않는다.
+
+주요 관측값은 request latency, error rate, DB latency, transaction rollback, reconciliation failure count, duplicate rejection count다.
+
+### 9. 테스트 게이트
+
+| 구분 | 검증 항목 |
+| --- | --- |
+| 단위 | 배분/투자 계산, 잔여액, 반올림 |
+| 통합 | transaction rollback, repository constraint |
+| API | 정상, 경계, 권한, 중복 |
+| DB | FK, unique, check 및 정합성 SQL |
+| 회귀 | 고정 dataset으로 총액 불변식 재실행 |
+
+### 10. 공식문서
+
+- Spring Boot Reference
+- Spring Framework Transaction Management
+- Spring Data JPA
+- OpenAPI Specification
+- PostgreSQL Numeric Types
+- PostgreSQL Transaction Isolation
+- OWASP ASVS
+
+---
 
 ## 1. 핵심 한 줄
 
