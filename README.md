@@ -582,6 +582,131 @@ NIST AI RMF 및 Generative AI Profile의 위험관리 관점을 적용한다.
 
 > **결론:** AlloHub의 AI는 투자 원장을 변경하거나 투자 결정을 대신하는 기능이 아니라, 검증된 내부/외부 Evidence를 검색, 요약, 설명해 운영자의 확인 비용을 낮추는 보조 기능으로 한정한다. 현재 구현은 내부 원장 evidence 조회와 deterministic summary까지다.
 
+## QA/QC - PRD/SRS/SDD 추적 기반 품질 통합본
+
+> **프로젝트:** AlloHub / AllocHub · **분류:** QA/QC · **상태:** PRD/SRS/SDD 추적 기반 품질 통합본
+
+품질의 최우선 기준은 UI 정상 동작보다 **금액 불변식, transaction atomicity, 추적성**이다.
+
+### 1. Quality Objective
+
+PRD/SRS의 요구사항을 검증 가능한 acceptance criteria로 연결한다.
+
+- 출자비율/금액 validation
+- 투자 자동배분 정확성
+- 배분금 자동계산 정확성
+- 총 출자금 정합성
+- transaction rollback
+- 인증/인가
+- `AuditLog` 추적
+- API NFR
+
+### 2. Traceability
+
+RTM은 최소 `PRD Goal/FR -> SRS FR/BR/NFR -> SDD Component/API/Entity -> Test Case -> Result/Evidence`를 연결한다.
+
+예시는 다음과 같다.
+
+- `G-001 -> BR-005 -> ReconciliationService -> TC-REC-*`
+- `FR-007/008 -> DistributionService -> TC-DIST-*`
+
+### 3. Static Review
+
+구현 전/PR review 단계에서 다음을 확인한다.
+
+- 계산식이 문서와 동일한가
+- 반올림/잔여액 정책이 명시되어 있는가
+- transaction 경계가 중간 상태를 외부에 노출하지 않는가
+- amount에 부동소수형을 잘못 쓰지 않는가
+- OpenAPI와 Controller 계약이 일치하는가
+- authorization check가 write API에 적용되는가
+
+### 4. Functional Test
+
+#### Investor
+
+- 정상 등록
+- 금액 0/음수
+- 비율 경계값
+- 합계 초과
+- 중복
+
+#### Investment
+
+- 정상 투자 및 자동 배분
+- 총 출자금 초과
+- 모든 상세 합계 검증
+- 중간 insert 실패 시 전체 rollback
+
+#### Distribution
+
+- 배당/회수 유형
+- 소수점/잔여액 edge case
+- 상세 합계 = 원금
+- 중복 요청/재시도
+
+### 5. Database Test
+
+- PK/FK/UNIQUE/CHECK 제약
+- orphan 0
+- 투자/배분 원장과 detail 합계
+- migration 전후 row count/business invariant
+- 필요한 query의 EXPLAIN plan
+
+### 6. API / Security Test
+
+- schema validation 400
+- authentication 401
+- authorization 403
+- duplicate 409
+- 없는 resource 404
+- 내부 오류 5xx의 정보노출 여부
+
+OWASP WSTG 관점에서 authentication, authorization, input validation, session, error handling을 점검한다.
+
+### 7. Non-functional Test
+
+SRS의 `조회 p95 1초`, `계산 500ms`, `99.5% availability`는 실제 측정 계획을 별도로 둔다.
+
+- 동일 dataset/환경/동시성 기록
+- warm-up 후 반복 측정
+- p50/p95와 error rate 함께 기록
+- DB slow query와 application latency 분리
+
+증거가 없으면 `NOT TESTED`다.
+
+### 8. Regression
+
+고정 fixture를 사용해 다음 불변식을 매 배포마다 재검증한다.
+
+- total contribution = investment + cash
+- sum investment allocation = investment amount
+- sum distribution details = distribution amount
+- rollback 후 partial row = 0
+
+### 9. Defect Management
+
+결함에는 requirement id, test case, severity, environment, reproduction, evidence, root cause, fix version, retest/regression result를 남긴다.
+
+금액 불일치, 권한 우회, partial commit은 release-blocking defect로 취급한다.
+
+### 10. Release Gate
+
+- P0/P1 계산/정합성 defect 0
+- RTM 핵심 요구사항 coverage 완료
+- 고정 regression pass
+- security critical/high 미해결 0
+- migration/reconciliation evidence 확보
+- 성능 NFR은 측정 결과 또는 명확한 `NOT TESTED` 표시
+
+### 11. 공식문서
+
+- ISTQB Certified Tester Foundation Level
+- OWASP Web Security Testing Guide
+- OWASP ASVS
+- PostgreSQL Constraints
+- Spring Boot Testing
+
 ---
 
 ## 1. 핵심 한 줄
