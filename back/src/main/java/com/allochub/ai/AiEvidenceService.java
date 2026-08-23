@@ -76,7 +76,7 @@ public class AiEvidenceService {
         if (investmentId != null) {
             Investment investment = investmentRepository
                     .findById(investmentId)
-                    .orElseThrow(() -> AppException.invalidInput("조회 가능한 투자 원장 근거가 없습니다"));
+                    .orElseThrow(() -> AppException.notFound("조회 가능한 투자 원장 근거가 없습니다"));
             return List.of(investment);
         }
         return investmentRepository.findByCompanyNameContainingIgnoreCaseOrderByInvestmentDateDesc(companyName);

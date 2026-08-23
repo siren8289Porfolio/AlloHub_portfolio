@@ -47,7 +47,7 @@ public class DistributionService {
         validate(request);
         investmentRepository
                 .findById(request.investmentId())
-                .orElseThrow(() -> AppException.invalidInput("필수 항목을 입력하세요"));
+                .orElseThrow(() -> AppException.notFound("투자 원장을 찾을 수 없습니다"));
 
         List<Map<String, Object>> details = buildDetails(request.distributionAmount());
         int totalDistributed = validateSum(details, request.distributionAmount());
@@ -65,7 +65,7 @@ public class DistributionService {
         validate(request);
         Investment investment = investmentRepository
                 .findById(request.investmentId())
-                .orElseThrow(() -> AppException.invalidInput("필수 항목을 입력하세요"));
+                .orElseThrow(() -> AppException.notFound("투자 원장을 찾을 수 없습니다"));
 
         List<Map<String, Object>> details = buildDetails(request.distributionAmount());
         validateSum(details, request.distributionAmount());
@@ -81,7 +81,7 @@ public class DistributionService {
             String investorId = (String) detail.get("investorId");
             Investor investor = investorRepository
                     .findById(investorId)
-                    .orElseThrow(() -> AppException.invalidInput("필수 항목을 입력하세요"));
+                    .orElseThrow(() -> AppException.notFound("출자자를 찾을 수 없습니다"));
             dd.setInvestor(investor);
             dd.setDistribution(distribution);
             dd.setDistributedAmount((Integer) detail.get("distributedAmount"));
@@ -101,7 +101,9 @@ public class DistributionService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list() {
-        return distributionRepository.findAll().stream().map(this::toListItem).toList();
+        return distributionRepository.findAllByOrderByDistributionDateDesc().stream()
+                .map(this::toListItem)
+                .toList();
     }
 
     private void validate(DistributionRequest request) {

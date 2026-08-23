@@ -85,7 +85,9 @@ public class InvestmentService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list() {
-        return investmentRepository.findAll().stream().map(this::toListItem).toList();
+        return investmentRepository.findAllByOrderByInvestmentDateDesc().stream()
+                .map(this::toListItem)
+                .toList();
     }
 
     private Map<String, Object> toResponse(

@@ -37,6 +37,10 @@ public class AppException extends RuntimeException {
         return new AppException(ErrorCode.DUPLICATE, message, HttpStatus.CONFLICT);
     }
 
+    public static AppException notFound(String message) {
+        return new AppException(ErrorCode.NOT_FOUND, message, HttpStatus.NOT_FOUND);
+    }
+
     public static AppException invalidAllocationRatio(double totalRatio) {
         return new AppException(
                 ErrorCode.INVALID_ALLOCATION_RATIO,

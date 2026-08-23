@@ -11,5 +11,8 @@ public interface InvestmentRepository extends JpaRepository<Investment, String> 
     int sumInvestmentAmount();
 
     @EntityGraph(attributePaths = {"investorInvestments", "investorInvestments.investor"})
+    List<Investment> findAllByOrderByInvestmentDateDesc();
+
+    @EntityGraph(attributePaths = {"investorInvestments", "investorInvestments.investor"})
     List<Investment> findByCompanyNameContainingIgnoreCaseOrderByInvestmentDateDesc(String companyName);
 }

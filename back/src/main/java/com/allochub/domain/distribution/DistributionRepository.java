@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface DistributionRepository extends JpaRepository<Distribution, String> {
 
+    @EntityGraph(attributePaths = {"investment"})
+    List<Distribution> findAllByOrderByDistributionDateDesc();
+
     @EntityGraph(attributePaths = {"investment", "details", "details.investor"})
     List<Distribution> findByInvestmentIdInOrderByDistributionDateDesc(Collection<String> investmentIds);
 }

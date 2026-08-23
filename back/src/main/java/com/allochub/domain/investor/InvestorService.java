@@ -45,7 +45,7 @@ public class InvestorService {
     public Map<String, Object> update(AuthUser user, String id, InvestorRequest request) {
         validate(request);
         Investor existing =
-                investorRepository.findById(id).orElseThrow(() -> AppException.invalidInput("필수 항목을 입력하세요"));
+                investorRepository.findById(id).orElseThrow(() -> AppException.notFound("출자자를 찾을 수 없습니다"));
         validateAllocationRatio(request.allocationRatio(), id);
 
         if (!existing.getName().equals(request.name())
@@ -53,6 +53,7 @@ public class InvestorService {
             throw AppException.duplicate("이미 등록된 출자자입니다");
         }
 
+        Map<String, Object> before = toResponse(existing);
         existing.setName(request.name());
         existing.setInvestmentAmount(request.investmentAmount());
         existing.setAllocationRatio(request.allocationRatio());
@@ -60,10 +61,11 @@ public class InvestorService {
         existing.setUpdatedBy(user.id());
 
         Investor saved = investorRepository.save(existing);
-        auditService.logUpdate(user, "Investor", id, existing, saved);
+        auditService.logUpdate(user, "Investor", id, before, toResponse(saved));
         return toResponse(saved);
     }
 
+    @Transactional(readOnly = true)
     public Map<String, Object> list() {
         List<Investor> investors = investorRepository.findAllByOrderByCreatedAtAsc();
         double totalRatio = investorRepository.sumAllocationRatio();
@@ -85,11 +87,12 @@ public class InvestorService {
     public void incrementCumulativeDistribution(String investorId, int amount) {
         Investor investor = investorRepository
                 .findById(investorId)
-                .orElseThrow(() -> AppException.invalidInput("필수 항목을 입력하세요"));
+                .orElseThrow(() -> AppException.notFound("출자자를 찾을 수 없습니다"));
         investor.setCumulativeDistribution(investor.getCumulativeDistribution() + amount);
         investorRepository.save(investor);
     }
 
+    @Transactional(readOnly = true)
     public List<Investor> findAll() {
         return investorRepository.findAllByOrderByCreatedAtAsc();
     }
