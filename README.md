@@ -421,6 +421,167 @@ ML 결과는 Evidence/Signal이며 최종 원장 데이터가 아니다. 모델 
 
 > **결론:** AlloHub의 ML은 필수 기능이 아니다. 현재는 rule-based reconciliation이 기준이며, 운영 데이터가 충분히 축적되고 ML이 baseline보다 실제 검토 효율을 높인다는 증거가 생길 때만 anomaly detection/ranking을 확장한다.
 
+## AI - Investment Information & Evidence Assistant Specification
+
+> **상태:** DESIGNED / PROPOSED / PARTIALLY IMPLEMENTED / NOT TESTED IN PRODUCTION
+
+> **핵심 경계:** AI는 AlloHub의 투자/배분 원장 계산기나 최종 투자 판단자가 아니다. 내부 원장과 검증된 외부 정보를 사람이 확인하기 쉽게 설명하고 Evidence를 정리하는 보조 계층이다.
+
+### 1. Document Overview
+
+- 관련 기준 문서: PRD_v0, SRS_v0, SDD_v0, DE - Data Engineering Specification, DA - Data Analytics Specification
+- 내부 source: `Investor`, `Investment`, `InvestorInvestment`, `Distribution`, `DistributionDetail`, `AuditLog`
+- 외부 source 후보: OpenDART 기업/공시 정보, KVIC 통계/공시, KRX reference data
+- 생성형 AI provider 연동 증거: 없음
+- 현재 구현 범위: 내부 원장 evidence 조회 및 deterministic summary API
+
+### 2. AI Problem Definition
+
+#### Goal
+
+운영자가 투자기업, 출자, 배분 현황과 관련 공시/기업정보를 여러 화면과 source에서 직접 대조하는 부담을 줄인다.
+
+#### Intended Use
+
+- 특정 투자기업의 내부 투자 현황 설명
+- 관련 공시/기업정보 요약
+- 내부 데이터와 외부 reference를 함께 보여주는 Evidence 정리
+- `AuditLog` 기반 변경 내역 설명 보조
+
+#### Out of Scope
+
+- 투자 여부 추천 또는 자동 의사결정
+- 예상 수익률 생성
+- 원장 금액 계산 또는 수정
+- `Distribution` 자동 승인
+- 외부 정보만으로 내부 원장 값을 덮어쓰기
+
+### 3. Functional Requirements
+
+- **AI-FR-01** 사용자가 선택한 투자기업과 관련된 내부 투자/배분 context를 조회할 수 있어야 한다.
+- **AI-FR-02** 외부 정보가 사용되는 경우 source와 기준 시점을 함께 제시해야 한다.
+- **AI-FR-03** 공시나 기업정보는 원문의 핵심 사실을 압축하되 내부 원장 사실과 구분해야 한다.
+- **AI-FR-04** 근거를 찾지 못한 내용은 확정 사실처럼 생성하지 않아야 한다.
+- **AI-FR-05** AI 응답으로 `Investment`/`Distribution`/`AuditLog`를 자동 변경하지 않아야 한다.
+- **AI-FR-06** 중요한 금융/운영 판단은 사용자 확인을 거쳐야 한다.
+
+### 4. Knowledge & Data Boundary
+
+Trusted internal context는 `Investor`, `Investment`, `InvestorInvestment`, `Distribution`, `DistributionDetail`, `AuditLog`다.
+
+External evidence candidate는 다음과 같다.
+
+- OpenDART: 기업/공시 원문/메타데이터
+- KVIC: 벤처투자 관련 공식 통계/공시
+- KRX: 상장회사/시장 reference
+
+외부 source는 내부 원장의 authoritative source가 아니라 enrichment/evidence다.
+
+### 5. AI System Design
+
+권장 구조는 다음과 같다.
+
+```text
+User Query -> authorization check -> internal context retrieval + external evidence retrieval -> grounded generation -> source/evidence display -> human review
+```
+
+AI layer는 기존 BE transaction 및 reconciliation 경로와 분리한다.
+
+현재 구현 API는 다음과 같다.
+
+```http
+POST /api/ai/investment-evidence
+Authorization: Bearer <operator-or-admin-token>
+Content-Type: application/json
+
+{
+  "investmentId": "optional-investment-id",
+  "companyName": "optional-company-name"
+}
+```
+
+`investmentId` 또는 `companyName` 중 하나가 필요하다. 응답은 내부 원장 facts, 외부 evidence 미구현 상태, source 기준시점, human decision boundary를 포함한다.
+
+### 6. Retrieval & Grounding
+
+- 회사 식별자는 가능한 경우 내부 company mapping과 외부 식별자를 명시적으로 연결한다.
+- retrieval 결과에는 source, 기준일, 식별자를 유지한다.
+- 답변은 retrieval된 context 범위에서 작성한다.
+- 내부 원장 값과 외부 공시 값이 다르면 하나를 임의 선택하지 않고 차이를 표시한다.
+- 현재 구현은 외부 retrieval/provider가 없으므로 내부 원장 기반 deterministic summary만 생성한다.
+
+### 7. Output Contract
+
+AI 응답은 최소 다음 구조를 권장한다.
+
+1. 요약
+2. 내부 원장 기준 사실
+3. 외부 Evidence
+4. 차이/주의사항
+5. Source / 기준 시점
+
+수치가 포함된 경우 가능한 한 원장/공시 source를 함께 표시한다.
+
+### 8. Evaluation
+
+구현 후 다음을 평가한다.
+
+- groundedness / source support
+- 내부 원장 숫자 보존 정확성
+- source citation 정확성
+- unsupported claim 비율
+- retrieval miss
+- 사용자 검토 완료율
+- latency / failure rate
+
+현재 실제 evaluation dataset과 threshold는 **NOT DEFINED / NOT TESTED**다.
+
+### 9. Responsible AI & Risk Controls
+
+NIST AI RMF 및 Generative AI Profile의 위험관리 관점을 적용한다.
+
+- **GOVERN:** AI owner, source owner, 승인/변경 책임 정의
+- **MAP:** intended use와 금지 use case 문서화
+- **MEASURE:** unsupported claim, grounding, source freshness, 오류 측정
+- **MANAGE:** fallback, human review, incident 기록, source 차단/교체 절차
+
+특히 금융 데이터 설명에서 생성된 문장을 authoritative ledger record로 취급하지 않는다.
+
+### 10. Security & Privacy
+
+- 기존 AlloHub 권한 범위를 retrieval에도 적용한다.
+- 사용자가 볼 수 없는 투자/출자 데이터가 prompt/context에 포함되지 않도록 한다.
+- 민감 내부 데이터의 외부 모델 전송 여부는 실제 provider/배포 구조 결정 후 별도 검토한다.
+- prompt와 response logging은 개인정보/민감정보 보존 정책과 함께 설계한다.
+
+### 11. Failure & Fallback
+
+- retrieval 실패: 답변 생성 대신 근거 부족 표시
+- 외부 source 장애: 내부 원장 기준 정보만 표시하고 외부 정보 미확인 상태 명시
+- 모델 timeout/error: 기존 AlloHub 조회 화면으로 fallback
+- 내부/외부 수치 충돌: 사용자 검토 대상으로 표시
+
+### 12. Evidence & Status
+
+| 항목 | 상태 |
+| --- | --- |
+| Internal ledger sources | 기존 설계에 존재 |
+| External data source design | DE 문서에 설계 |
+| AI assistant use case | PROPOSED |
+| Internal retrieval implementation | IMPLEMENTED |
+| External retrieval implementation | NOT IMPLEMENTED |
+| Prompt / generation implementation | DETERMINISTIC SUMMARY ONLY |
+| Evaluation dataset | NOT DEFINED |
+| Production monitoring | NOT IMPLEMENTED |
+
+### 13. Official References
+
+- NIST - AI Risk Management Framework 1.0: https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10
+- NIST - Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile: https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence
+- Google for Developers - Introduction to Machine Learning Problem Framing: https://developers.google.com/machine-learning/problem-framing
+
+> **결론:** AlloHub의 AI는 투자 원장을 변경하거나 투자 결정을 대신하는 기능이 아니라, 검증된 내부/외부 Evidence를 검색, 요약, 설명해 운영자의 확인 비용을 낮추는 보조 기능으로 한정한다. 현재 구현은 내부 원장 evidence 조회와 deterministic summary까지다.
+
 ---
 
 ## 1. 핵심 한 줄
