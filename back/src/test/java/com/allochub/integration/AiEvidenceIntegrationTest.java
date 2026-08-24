@@ -54,11 +54,14 @@ class AiEvidenceIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.status").value("DESIGNED / PROPOSED / NOT IMPLEMENTED / NOT TESTED"))
+                .andExpect(jsonPath("$.data.status")
+                        .value("DESIGNED / PROPOSED / PARTIALLY IMPLEMENTED / NOT TESTED IN PRODUCTION"))
                 .andExpect(jsonPath("$.data.internalLedgerFacts.totals.investmentCount").value(1))
                 .andExpect(jsonPath("$.data.internalLedgerFacts.totals.investmentAmount").value(50000))
                 .andExpect(jsonPath("$.data.internalLedgerFacts.investments[0].companyName").value("알로테크"))
-                .andExpect(jsonPath("$.data.externalEvidence[0].status").value("NOT_IMPLEMENTED"))
+                .andExpect(jsonPath("$.data.aiService.evidenceAvailable").value(false))
+                .andExpect(jsonPath("$.data.aiService.explanationAvailable").value(false))
+                .andExpect(jsonPath("$.data.externalEvidence[0].status").value("UNAVAILABLE"))
                 .andExpect(jsonPath("$.data.humanDecisionBoundary[0]").value("투자 여부 추천 또는 자동 의사결정을 하지 않습니다."));
     }
 

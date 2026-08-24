@@ -17,6 +17,15 @@ spring:
   flyway:
     enabled: false
 
+allochub:
+  ai:
+    # Integration tests assert graceful degradation without a running FastAPI process.
+    enabled: true
+    base-url: http://127.0.0.1:1
+    connect-timeout-ms: 200
+    read-timeout-ms: 200
+
 logging:
   level:
     org.hibernate.SQL: debug
+    com.allochub.ai: warn

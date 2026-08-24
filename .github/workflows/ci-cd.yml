@@ -43,6 +43,16 @@ jobs:
         env:
           SPRING_PROFILES_ACTIVE: test
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: AI service smoke
+        run: |
+          cd ai-service
+          pip install -r requirements.txt
+          python -c "from app.main import app; from app.evidence import query_evidence; from app.schemas import EvidenceQueryRequest; print(query_evidence(EvidenceQueryRequest(companyName='test')).status)"
+
       - name: Frontend build
         run: npm run build -w front
         env:

@@ -20,19 +20,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AiEvidenceService {
 
-    private static final String STATUS = "DESIGNED / PROPOSED / NOT IMPLEMENTED / NOT TESTED";
+    private static final String STATUS = "DESIGNED / PROPOSED / PARTIALLY IMPLEMENTED / NOT TESTED IN PRODUCTION";
 
     private final InvestmentRepository investmentRepository;
     private final DistributionRepository distributionRepository;
     private final AuditLogRepository auditLogRepository;
+    private final AiClient aiClient;
 
     public AiEvidenceService(
             InvestmentRepository investmentRepository,
             DistributionRepository distributionRepository,
-            AuditLogRepository auditLogRepository) {
+            AuditLogRepository auditLogRepository,
+            AiClient aiClient) {
         this.investmentRepository = investmentRepository;
         this.distributionRepository = distributionRepository;
         this.auditLogRepository = auditLogRepository;
+        this.aiClient = aiClient;
     }
 
     @Transactional(readOnly = true)
@@ -60,14 +63,42 @@ public class AiEvidenceService {
                 : auditLogRepository.findByEntityTypeAndEntityIdInOrderByCreatedAtDesc(
                         "Distribution", distributionIds);
 
+        Map<String, Object> internalFacts = buildInternalFacts(investments, distributions);
+        String resolvedCompanyName = investments.stream()
+                .map(Investment::getCompanyName)
+                .findFirst()
+                .orElse(companyName);
+
+        Map<String, Object> evidenceResponse = aiClient.queryEvidence(resolvedCompanyName, investmentId);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> evidenceItems = evidenceResponse.get("evidence") instanceof List<?> list
+                ? list.stream()
+                        .filter(Map.class::isInstance)
+                        .map(item -> (Map<String, Object>) item)
+                        .toList()
+                : List.of();
+
+        Map<String, Object> explanationResponse =
+                aiClient.explain(resolvedCompanyName, investmentId, internalFacts, evidenceItems);
+
+        String summary = explanationResponse.get("explanation") instanceof String explanation
+                        && Boolean.TRUE.equals(explanationResponse.get("available"))
+                ? explanation
+                : buildSummary(investments, distributions, investmentAuditLogs, distributionAuditLogs);
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", STATUS);
         response.put("query", buildQuery(investmentId, companyName));
-        response.put("summary", buildSummary(investments, distributions, investmentAuditLogs, distributionAuditLogs));
-        response.put("internalLedgerFacts", buildInternalFacts(investments, distributions));
-        response.put("externalEvidence", buildExternalEvidence());
-        response.put("differencesAndCautions", buildCautions());
-        response.put("sources", buildSources(investments, distributions, investmentAuditLogs, distributionAuditLogs));
+        response.put("summary", summary);
+        response.put("internalLedgerFacts", internalFacts);
+        response.put("externalEvidence", mergeExternalEvidence(evidenceResponse, evidenceItems));
+        response.put("aiService", buildAiServiceStatus(evidenceResponse, explanationResponse));
+        response.put(
+                "differencesAndCautions",
+                buildCautions(evidenceResponse, explanationResponse));
+        response.put(
+                "sources",
+                buildSources(investments, distributions, investmentAuditLogs, distributionAuditLogs, evidenceResponse));
         response.put("humanDecisionBoundary", buildDecisionBoundary());
         return response;
     }
@@ -103,8 +134,14 @@ public class AiEvidenceService {
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("확인된 기업 없음");
 
-        return "%s 관련 내부 원장 기준 투자 %d건, 투자금 합계 %d, 배분 %d건, 배분금 합계 %d, 관련 감사 로그 %d건을 확인했습니다. 외부 Evidence와 생성형 요약은 아직 구현/검증되지 않았습니다."
-                .formatted(companyNames, investments.size(), totalInvestment, distributions.size(), totalDistribution, auditCount);
+        return "%s 관련 내부 원장 기준 투자 %d건, 투자금 합계 %d, 배분 %d건, 배분금 합계 %d, 관련 감사 로그 %d건을 확인했습니다. FastAPI 설명이 불가하여 Spring deterministic summary로 대체했습니다."
+                .formatted(
+                        companyNames,
+                        investments.size(),
+                        totalInvestment,
+                        distributions.size(),
+                        totalDistribution,
+                        auditCount);
     }
 
     private Map<String, Object> buildInternalFacts(
@@ -158,35 +195,55 @@ public class AiEvidenceService {
         return fact;
     }
 
-    private List<Map<String, Object>> buildExternalEvidence() {
-        return List.of(
-                externalEvidence("OpenDART", "기업/공시 원문/메타데이터"),
-                externalEvidence("KVIC", "벤처투자 관련 공식 통계/공시"),
-                externalEvidence("KRX", "상장회사/시장 reference"));
+    private List<Map<String, Object>> mergeExternalEvidence(
+            Map<String, Object> evidenceResponse, List<Map<String, Object>> evidenceItems) {
+        if (!evidenceItems.isEmpty()) {
+            return evidenceItems;
+        }
+        Map<String, Object> fallback = new LinkedHashMap<>();
+        fallback.put("source", "FastAPI AI Service");
+        fallback.put("scope", "OpenDART / 공공데이터 Evidence");
+        fallback.put("status", String.valueOf(evidenceResponse.getOrDefault("status", "UNAVAILABLE")));
+        fallback.put(
+                "message",
+                String.valueOf(evidenceResponse.getOrDefault("reason", "external evidence unavailable")));
+        return List.of(fallback);
     }
 
-    private Map<String, Object> externalEvidence(String source, String scope) {
-        Map<String, Object> evidence = new LinkedHashMap<>();
-        evidence.put("source", source);
-        evidence.put("scope", scope);
-        evidence.put("status", "NOT_IMPLEMENTED");
-        evidence.put("message", "현재 외부 evidence retrieval 구현 및 검증 증거가 없어 확정 사실로 사용하지 않습니다.");
-        return evidence;
+    private Map<String, Object> buildAiServiceStatus(
+            Map<String, Object> evidenceResponse, Map<String, Object> explanationResponse) {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("evidenceAvailable", Boolean.TRUE.equals(evidenceResponse.get("available")));
+        status.put("explanationAvailable", Boolean.TRUE.equals(explanationResponse.get("available")));
+        status.put("evidenceStatus", evidenceResponse.getOrDefault("status", "UNAVAILABLE"));
+        status.put("explanationStatus", explanationResponse.getOrDefault("status", "UNAVAILABLE"));
+        status.put(
+                "boundary",
+                "FastAPI AI Service failures are isolated; ledger transactions are unaffected.");
+        return status;
     }
 
-    private List<String> buildCautions() {
-        return List.of(
-                "AI 응답은 Investment, Distribution, AuditLog를 자동 변경하지 않습니다.",
-                "외부 source retrieval은 아직 구현되지 않아 내부 원장과 외부 공시 값의 차이를 계산하지 않습니다.",
-                "생성형 AI provider와 evaluation dataset이 정해지기 전까지 unsupported claim을 만들지 않는 deterministic 요약만 제공합니다.",
-                "중요한 금융/운영 판단은 사용자 확인 대상입니다.");
+    private List<String> buildCautions(
+            Map<String, Object> evidenceResponse, Map<String, Object> explanationResponse) {
+        List<String> cautions = new ArrayList<>();
+        cautions.add("AI 응답은 Investment, Distribution, AuditLog를 자동 변경하지 않습니다.");
+        cautions.add("Spring Backend가 원장 정합성의 최종 소유자이며 FastAPI는 Evidence/설명만 담당합니다.");
+        if (!Boolean.TRUE.equals(evidenceResponse.get("available"))) {
+            cautions.add("외부 Evidence 조회가 불가하여 evidence unavailable 상태로 표시합니다.");
+        }
+        if (!Boolean.TRUE.equals(explanationResponse.get("available"))) {
+            cautions.add("FastAPI 설명이 불가하여 내부 원장 기반 deterministic summary로 대체합니다.");
+        }
+        cautions.add("중요한 금융/운영 판단은 사용자 확인 대상입니다.");
+        return cautions;
     }
 
     private List<Map<String, Object>> buildSources(
             List<Investment> investments,
             List<Distribution> distributions,
             List<AuditLog> investmentAuditLogs,
-            List<AuditLog> distributionAuditLogs) {
+            List<AuditLog> distributionAuditLogs,
+            Map<String, Object> evidenceResponse) {
         List<Map<String, Object>> sources = new ArrayList<>();
         sources.add(source("Investor", "출자자 배분 context", "internal-ledger", investments.size()));
         sources.add(source("Investment", "투자 원장", "internal-ledger", investments.size()));
@@ -198,9 +255,13 @@ public class AiEvidenceService {
                 "투자/배분 변경 이력",
                 "internal-ledger",
                 investmentAuditLogs.size() + distributionAuditLogs.size()));
-        sources.add(source("OpenDART", "기업/공시 원문/메타데이터", "external-evidence-not-implemented", 0));
-        sources.add(source("KVIC", "벤처투자 공식 통계/공시", "external-evidence-not-implemented", 0));
-        sources.add(source("KRX", "상장회사/시장 reference", "external-evidence-not-implemented", 0));
+        sources.add(source(
+                "FastAPI AI Service",
+                "Evidence/LLM 설명",
+                Boolean.TRUE.equals(evidenceResponse.get("available"))
+                        ? "external-ai-service"
+                        : "external-ai-service-unavailable",
+                0));
         return sources;
     }
 

@@ -2,9 +2,11 @@
 
 ## MVP 백엔드 설계 기준
 
-> **프로젝트:** AlloHub / AllocHub · **분류:** BE · **상태:** PRD/SRS/SDD 기반 설계 통합본
+> **프로젝트:** AlloHub / AllocHub · **분류:** BE · **상태:** PRD/SRS/SDD 기반 설계 통합본 + FastAPI AI Service 연동
 
 현재 MVP의 핵심은 출자금, 기업 투자, 배분금의 **금액 정합성과 추적 가능성**이다. 확인되지 않은 성능이나 구현 결과는 사실로 쓰지 않는다.
+
+Evidence/LLM 설명은 `ai-service`(FastAPI)로 분리하고 Spring은 `AIClient`로 HTTP 호출한다. AI 장애는 원장 트랜잭션과 격리한다.
 
 ### 1. 목적과 범위
 
@@ -490,12 +492,21 @@ External evidence candidate는 다음과 같다.
 권장 구조는 다음과 같다.
 
 ```text
-User Query -> authorization check -> internal context retrieval + external evidence retrieval -> grounded generation -> source/evidence display -> human review
+Frontend
+  ↓
+Spring Boot Backend (ledger + AIClient)
+  ├─ Investor / Investment / Distribution / Reconciliation
+  └─ AIClient (timeout 3s, graceful degradation)
+        ↓ HTTP
+FastAPI AI Service
+  ├─ POST /ai/evidence/query
+  └─ POST /ai/explain
 ```
 
-AI layer는 기존 BE transaction 및 reconciliation 경로와 분리한다.
+Spring은 원장과 정합성의 최종 소유자이고, FastAPI는 Evidence/설명만 담당한다.
+AI Service 장애(timeout/5xx/invalid response)는 `AIClient`에서 격리하며 출자·투자·배분 원장 트랜잭션을 실패시키지 않는다.
 
-현재 구현 API는 다음과 같다.
+현재 Spring 진입 API:
 
 ```http
 POST /api/ai/investment-evidence
@@ -508,7 +519,12 @@ Content-Type: application/json
 }
 ```
 
-`investmentId` 또는 `companyName` 중 하나가 필요하다. 응답은 내부 원장 facts, 외부 evidence 미구현 상태, source 기준시점, human decision boundary를 포함한다.
+`investmentId` 또는 `companyName` 중 하나가 필요하다. 응답은 내부 원장 facts, FastAPI Evidence/설명 상태(`aiService`), source 기준시점, human decision boundary를 포함한다. FastAPI가 불가하면 `evidence unavailable` / deterministic summary fallback으로 degrade한다.
+
+구현 위치:
+
+- `ai-service/` — FastAPI AI Service
+- `back/.../ai/AiClient.java` — Spring HTTP client (3초 read timeout)
 
 ### 6. Retrieval & Grounding
 
@@ -516,7 +532,7 @@ Content-Type: application/json
 - retrieval 결과에는 source, 기준일, 식별자를 유지한다.
 - 답변은 retrieval된 context 범위에서 작성한다.
 - 내부 원장 값과 외부 공시 값이 다르면 하나를 임의 선택하지 않고 차이를 표시한다.
-- 현재 구현은 외부 retrieval/provider가 없으므로 내부 원장 기반 deterministic summary만 생성한다.
+- 현재 구현은 Spring 내부 원장 retrieval + FastAPI Evidence/설명 호출이다. FastAPI 장애 시 내부 원장 deterministic summary로 degrade한다.
 
 ### 7. Output Contract
 
@@ -577,8 +593,10 @@ NIST AI RMF 및 Generative AI Profile의 위험관리 관점을 적용한다.
 | External data source design | DE 문서에 설계 |
 | AI assistant use case | PROPOSED |
 | Internal retrieval implementation | IMPLEMENTED |
-| External retrieval implementation | NOT IMPLEMENTED |
-| Prompt / generation implementation | DETERMINISTIC SUMMARY ONLY |
+| FastAPI AI Service | IMPLEMENTED (local/docker; not production-verified) |
+| Spring AIClient + graceful degradation | IMPLEMENTED |
+| External retrieval implementation | STUB / UNAVAILABLE without API key |
+| Prompt / generation implementation | DETERMINISTIC SUMMARY VIA FASTAPI |
 | Evaluation dataset | NOT DEFINED |
 | Production monitoring | NOT IMPLEMENTED |
 

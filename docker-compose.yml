@@ -22,6 +22,27 @@ services:
     networks:
       - allohub
 
+  allohub-ai:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    image: allohub-ai:latest
+    container_name: allohub-ai
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      AI_OPENDART_API_KEY: ${AI_OPENDART_API_KEY:-}
+      AI_LLM_ENABLED: ${AI_LLM_ENABLED:-false}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - allohub
+
   allohub-app:
     build:
       context: .
@@ -41,10 +62,16 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       ALLOC_OPERATOR_TOKEN: ${ALLOC_OPERATOR_TOKEN:-operator-dev-token}
       ALLOC_ADMIN_TOKEN: ${ALLOC_ADMIN_TOKEN:-admin-dev-token}
+      ALLOC_AI_ENABLED: ${ALLOC_AI_ENABLED:-true}
+      ALLOC_AI_BASE_URL: ${ALLOC_AI_BASE_URL:-http://allohub-ai:8000}
+      ALLOC_AI_CONNECT_TIMEOUT_MS: ${ALLOC_AI_CONNECT_TIMEOUT_MS:-1000}
+      ALLOC_AI_READ_TIMEOUT_MS: ${ALLOC_AI_READ_TIMEOUT_MS:-3000}
       PORT: 8080
     depends_on:
       db:
         condition: service_healthy
+      allohub-ai:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s

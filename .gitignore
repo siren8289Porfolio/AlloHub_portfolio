@@ -18,6 +18,12 @@ back/data/
 back/build/
 back/.gradle/
 
+# ai-service
+ai-service/.venv/
+ai-service/__pycache__/
+ai-service/**/__pycache__/
+ai-service/*.pyc
+
 # generated prisma
 back/src/generated/prisma
 
@@ -28,3 +34,4 @@ npm-debug.log*
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+.idea/

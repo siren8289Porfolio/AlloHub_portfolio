@@ -22,6 +22,11 @@ allochub:
   auth:
     operator-token: ${ALLOC_OPERATOR_TOKEN:operator-dev-token}
     admin-token: ${ALLOC_ADMIN_TOKEN:admin-dev-token}
+  ai:
+    enabled: ${ALLOC_AI_ENABLED:true}
+    base-url: ${ALLOC_AI_BASE_URL:http://localhost:8000}
+    connect-timeout-ms: ${ALLOC_AI_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${ALLOC_AI_READ_TIMEOUT_MS:3000}
 
 management:
   endpoints:
