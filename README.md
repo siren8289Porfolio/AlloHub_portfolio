@@ -1,35 +1,704 @@
-# Data Analysis Portfolio README Guide
+# AlloHub — Investment Ledger Analytics
 
-이 브랜치의 README는 데이터 분석 포트폴리오를 어떻게 보여줄지에 집중한다. Reddit의 `r/dataanalysis`, `r/datascience`에서 현직 분석가와 채용 담당자들이 반복해서 높게 평가한 방식은, 기술 나열보다 **비즈니스 문제를 어떻게 해석하고 어떤 행동 제안으로 연결했는지**를 짧고 선명하게 보여주는 구조다.
+> **투자·출자·배분 원장 데이터를 분석 가능한 Mart로 변환하고, 자금 정합성과 투자 집행 현황을 SQL로 검증하는 Data Analytics 프로젝트**
 
-## Project Title & Summary
+## 1. Project Overview
 
-README의 맨 위에는 프로젝트 제목, 한 줄 요약, 그리고 가장 완성도 높은 대시보드 이미지를 먼저 배치한다. 채용 담당자는 몇 초 안에 프로젝트의 주제와 결과를 판단하므로, 첫 문장에는 "무슨 데이터를 가지고 어떤 문제를 풀었고 어떤 결과를 얻었는지"가 바로 드러나야 한다. 가능하면 이미지 바로 아래에 Tableau Public, Power BI, Streamlit 같은 라이브 링크를 함께 두어 클릭 한 번으로 결과를 확인할 수 있게 만드는 것이 좋다.
+AlloHub는 출자자, 기업 투자, 투자금 배분, 회수·배분금 데이터를 관리하는 투자 원장 기반 프로젝트입니다.
 
-## Business Problem
+Data Analytics 영역에서는 운영 데이터 자체를 변경하는 대신 PostgreSQL OLTP 원장을 분석 Source로 사용하여,
 
-이 섹션에서는 "무엇을 분석했는가"보다 "왜 이 문제를 풀어야 하는가"를 먼저 설명한다. 표현도 기술 연습 중심이 아니라 매출 증대, 이탈 방지, 운영 효율 개선, 전환율 향상처럼 비즈니스 언어로 쓰는 편이 훨씬 설득력이 있다. 좋은 README는 데이터셋 설명에서 시작하지 않고, 해결하려는 문제와 분석 목적, 그리고 그 문제를 잘 풀었다고 판단할 기준(KPI)이 무엇인지를 먼저 제시한다.
+**Business Question → KPI 정의 → Data Quality 검증 → Analytics Mart → Insight**
 
-## Data & Tech Stack
+흐름으로 데이터를 분석할 수 있는 구조를 만들었습니다.
 
-여기서는 사용한 데이터 출처와 범위, 주요 컬럼, 그리고 분석에 쓴 도구를 직관적으로 정리한다. Kaggle 데이터든 공공데이터든 사내 시뮬레이션 데이터든 출처를 명확히 적고, 가능하면 기간과 행 수까지 함께 적어 프로젝트의 스케일을 감 잡게 해주는 것이 좋다. 기술 스택은 Python, SQL, Tableau, Power BI, Excel, GitHub처럼 한눈에 읽히는 형태로 정리하고, 수집 스크립트나 쿼리 파일, 노트북 위치가 있다면 같이 연결해 재현 가능성을 높여준다.
+```text
+PostgreSQL OLTP
+      ↓
+Data Quality Check
+      ↓
+Analytics Mart
+      ↓
+KPI / Reconciliation
+      ↓
+Data Analysis
+      ↓
+Business Decision
+```
 
-## Data Cleaning & Analysis
+### 핵심 구현
 
-이 부분은 전체 코드를 길게 보여주는 자리가 아니라, 핵심 전처리와 분석 흐름을 요약해서 설명하는 자리다. 예를 들어 결측치와 이상치를 어떻게 처리했는지, 어떤 파생변수를 만들었는지, 세그먼트 분석·코호트 분석·퍼널 분석·A/B 테스트 같은 방법 중 무엇을 왜 선택했는지를 짧게 정리하면 충분하다. 채용 담당자가 보고 싶은 것은 코드 양이 아니라, 데이터를 어떻게 비즈니스 질문에 맞게 가공했고 어떤 판단 과정을 거쳤는지다.
+* SQL 기반 **Data Quality Rule 10개**
+* 투자/배분 금액 정합성 검증
+* `dim_*` / `fact_*` 기반 **Analytics Mart 6개**
+* 운영 DB와 분석 계층 분리
+* DQ 실패 시 분석 Mart를 신뢰하지 않는 **Quality Gate**
+* Demo dataset 기반 투자 집행률 및 자금 잔액 검증
 
-## Key Insights & Dashboard
+---
 
-가장 중요한 인사이트 3~4개는 차트와 함께 숫자 중심으로 제시하는 것이 좋다. "상관관계가 있었다" 같은 표현보다 "재구매 고객군의 평균 객단가가 신규 고객 대비 18% 높았다"처럼 바로 의미가 전달되는 문장이 더 강하다. 가능하면 각 인사이트는 대시보드의 어떤 차트에서 확인할 수 있는지도 연결해 주고, README 안에는 대표 화면 캡처를 넣고, 외부에서는 라이브 대시보드 링크로 바로 이어지게 구성하는 것이 이상적이다.
+# 2. Business Problem
 
-## Business Recommendations
+투자 원장에서는 단순히 투자 금액을 저장하는 것만으로는 충분하지 않습니다.
 
-이 섹션은 많은 현직자들이 가장 중요하게 보는 부분이다. 분석 결과를 기반으로 실제로 어떤 액션을 취할 수 있는지, 그리고 그 실행안이 왜 비용 대비 효과가 높은지를 적어야 한다. 단순히 "마케팅을 강화해야 한다"가 아니라 "이탈 위험이 높은 첫 구매 7일 이내 고객을 대상으로 리마인드 쿠폰 실험을 우선 적용한다"처럼 대상, 타이밍, 기대 효과가 보이게 쓰는 편이 좋다. 마지막에는 후속 실험, 추가 데이터 확보, 대시보드 운영 계획 같은 Next Step을 붙이면 프로젝트 완성도가 높아진다.
+운영자는 다음 질문에 빠르게 답할 수 있어야 합니다.
 
-## What Gets Penalized and What Gets Praised
+* 현재 전체 출자금은 얼마인가?
+* 그중 실제 기업 투자에 집행된 금액은 얼마인가?
+* 아직 투자되지 않은 현금은 얼마인가?
+* 각 투자 건의 출자자별 배분 합계가 실제 투자금과 일치하는가?
+* 회수·배분된 금액과 출자자별 배분 상세 합계가 일치하는가?
+* 특정 출자자에게 배분 비율이 과도하게 집중되어 있지는 않은가?
+* 원장 데이터에 NULL, 중복, FK 단절 등의 문제가 없는가?
 
-포트폴리오에서 자주 감점되는 사례는 너무 흔한 데이터셋만 사용하거나, 비즈니스 맥락 없이 기술 설명만 늘어놓거나, 결과물을 정적인 이미지로만 끝내는 경우다. 반대로 좋은 평가를 받는 포인트는 직접 수집하거나 스크래핑한 데이터를 포함하는 것, 분석 결과를 성과 중심 문장으로 해석하는 것, 그리고 README 상단에 대시보드 캡처와 라이브 링크를 함께 배치해 결과를 즉시 보여주는 것이다.
+특히 금융성 데이터는 하나의 잘못된 행이 집계 결과 전체를 왜곡할 수 있습니다.
 
-## Recommended Project Types
+따라서 분석 전에 먼저 **원장 데이터가 분석 가능한 상태인지 검증하는 과정**이 필요하다고 판단했습니다.
 
-데이터 분석 포트폴리오에서 특히 반응이 좋은 대표 유형은 네 가지다. 첫째는 비즈니스 문제 정의부터 SQL/Python 분석, 대시보드, 실행 제안까지 이어지는 End-to-End 인사이트 프로젝트다. 둘째는 API나 스크래핑으로 데이터를 수집하고 자동으로 갱신되는 대시보드까지 연결하는 파이프라인 자동화 프로젝트다. 셋째는 가설 설정, 실험 설계, 통계 검정, 의사결정 제안까지 담은 A/B 테스트 프로젝트다. 넷째는 CTE, Window Function, 복합 Join을 활용해 실제 비즈니스 지표를 깊게 뽑아내는 SQL 딥다이브 프로젝트다. 이 네 유형은 각각 문제 해결력, 데이터 처리력, 통계적 사고, SQL 숙련도를 보여주기에 포트폴리오 대표작으로 쓰기 좋다.
+---
+
+# 3. Analysis Questions
+
+## BQ-01. 전체 출자금 중 실제 투자에 얼마나 집행되었는가?
+
+확인 지표:
+
+* Total Contribution
+* Total Investment
+* Cash Balance
+* Capital Deployment Rate
+
+이를 통해 현재 자금이 얼마나 투자에 사용되었고 얼마나 현금으로 남아 있는지 확인합니다.
+
+---
+
+## BQ-02. 투자금 배분은 원장 금액과 일치하는가?
+
+투자금은 출자자의 배분 비율에 따라 나누어집니다.
+
+따라서 아래 조건이 항상 유지되어야 합니다.
+
+```text
+Investment Amount
+=
+SUM(Investor Allocated Amount)
+```
+
+차이가 발생하면 투자 원장 또는 배분 데이터에 정합성 문제가 있는 것으로 판단합니다.
+
+---
+
+## BQ-03. 회수·배분금은 출자자별 상세 금액과 일치하는가?
+
+배분 데이터 역시 다음 조건을 만족해야 합니다.
+
+```text
+Distribution Amount
+=
+SUM(Distribution Detail Amount)
+```
+
+전체 배분금과 출자자별 상세 배분금의 차이를 확인하여 회수·정산 데이터 오류를 탐지합니다.
+
+---
+
+## BQ-04. 출자 비중은 특정 투자자에게 집중되어 있는가?
+
+출자자별로 다음 데이터를 비교합니다.
+
+```text
+Contribution Amount
+Allocation Ratio
+Allocated Investment
+Cumulative Distribution
+```
+
+이를 통해 전체 출자 구조와 투자자별 자금 비중을 확인할 수 있습니다.
+
+---
+
+# 4. KPI Definition
+
+| KPI                             | 정의               | 계산                                           |
+| ------------------------------- | ---------------- | -------------------------------------------- |
+| Total Contribution              | 전체 출자금           | `SUM(investors.investment_amount)`           |
+| Total Investment                | 전체 기업 투자금        | `SUM(investments.investment_amount)`         |
+| Cash Balance                    | 아직 투자되지 않은 자금    | `Total Contribution - Total Investment`      |
+| Capital Deployment Rate         | 출자금 중 실제 투자된 비율  | `Total Investment / Total Contribution`      |
+| Allocation Reconciliation Gap   | 투자금과 출자자별 배분금 차이 | `Investment - SUM(Allocated)`                |
+| Distribution Reconciliation Gap | 배분 원금과 상세 배분금 차이 | `Distribution - SUM(Distributed)`            |
+| Investor Allocation Ratio       | 출자자별 자금 비중       | `Investor Contribution / Total Contribution` |
+| Reconciliation Pass Rate        | 정합성 검증 통과 비율     | `PASS / Total Checks`                        |
+
+---
+
+# 5. Data Model
+
+분석 Source는 운영 PostgreSQL 원장입니다.
+
+## Source Tables
+
+| Table                  | Grain     | 설명             |
+| ---------------------- | --------- | -------------- |
+| `investors`            | 출자자 1명    | 출자금, 배분 비율, 상태 |
+| `investments`          | 기업 투자 1건  | 투자기업, 투자금, 투자일 |
+| `investor_investments` | 투자 × 출자자  | 투자금의 출자자별 배분   |
+| `distributions`        | 배분 1건     | 회수·배분금 원장      |
+| `distribution_details` | 배분 × 출자자  | 출자자별 배분 상세     |
+| `audit_logs`           | 변경 이벤트 1건 | 주요 데이터 변경 이력   |
+
+핵심 관계는 다음과 같습니다.
+
+```text
+Investor
+   │
+   ├──────────────┐
+   ↓              ↓
+InvestorInvestment
+   ↑
+Investment
+   │
+   ↓
+Distribution
+   │
+   ↓
+DistributionDetail
+   │
+   └────────────→ Investor
+```
+
+---
+
+# 6. Analytics Architecture
+
+운영 Entity를 그대로 분석에 사용하지 않고 별도의 Analytics View를 제공합니다.
+
+```mermaid
+flowchart LR
+    A["PostgreSQL OLTP"] --> B["Data Quality Check"]
+    B --> C{"DQ PASS?"}
+
+    C -->|NO| D["Investigate / Fix"]
+    C -->|YES| E["Analytics Schema"]
+
+    E --> F["Dimension Views"]
+    E --> G["Fact Views"]
+
+    F --> H["KPI / Analysis"]
+    G --> H
+
+    H --> I["Insight"]
+    I --> J["Business Decision"]
+```
+
+운영 데이터의 **Write Authority는 PostgreSQL OLTP에 유지**하고, Analytics 영역에서는 원장을 수정하지 않는 Read-only View를 사용합니다.
+
+---
+
+# 7. Data Quality
+
+분석 결과보다 먼저 확인한 것은 데이터의 신뢰성이었습니다.
+
+현재 SQL에서는 총 **10개의 Data Quality / Business Invariant Check**를 수행합니다.
+
+| Check                                | 검증 목적                 |
+| ------------------------------------ | --------------------- |
+| `INVESTOR_PK_NULL`                   | 출자자 PK NULL 확인        |
+| `INVESTOR_PK_DUPLICATE`              | 출자자 PK 중복 확인          |
+| `INVESTMENT_AMOUNT_POSITIVE`         | 투자 금액 양수 검증           |
+| `INVESTOR_INVESTMENT_FK_ORPHAN`      | 투자-출자자 관계 FK 검증       |
+| `INVESTMENT_ALLOCATION_SUM_MISMATCH` | 투자금과 출자자별 배분 합계 비교    |
+| `DISTRIBUTION_AMOUNT_POSITIVE`       | 배분 금액 양수 검증           |
+| `DISTRIBUTION_DETAIL_FK_ORPHAN`      | 배분 상세 FK 검증           |
+| `DISTRIBUTION_DETAIL_SUM_MISMATCH`   | 배분 원금과 상세 합계 비교       |
+| `CASH_BALANCE_NEGATIVE`              | 투자금이 전체 출자금을 초과하는지 검증 |
+| `ALLOCATION_RATIO_TOTAL_EXCEEDED`    | 전체 배분 비율 100% 초과 확인   |
+
+결과는 다음 형태로 반환됩니다.
+
+```text
+check_name
+failed_rows
+status
+checked_at
+```
+
+```text
+failed_rows = 0
+        ↓
+      PASS
+
+failed_rows > 0
+        ↓
+      FAIL
+```
+
+### Quality Gate
+
+```text
+OLTP Source
+    ↓
+DQ Check
+    ↓
+All PASS
+    ↓
+Analytics Mart Publish
+```
+
+DQ가 실패한 상태에서는 해당 Mart를 신뢰 가능한 분석 결과로 취급하지 않습니다.
+
+---
+
+# 8. Analytics Mart
+
+분석을 위해 `analytics` schema 아래에 Dimension과 Fact View를 구성했습니다.
+
+## Dimension
+
+### `analytics.dim_investor`
+
+출자자 분석 기준 정보입니다.
+
+```text
+investor_id
+investor_name
+contribution_amount
+allocation_ratio
+status
+cumulative_distribution
+created_at
+updated_at
+```
+
+활용:
+
+* 출자자별 투자 비중
+* 출자자별 출자금
+* 누적 배분금
+* 출자자 상태 분석
+
+---
+
+### `analytics.dim_company`
+
+투자기업 기준 Dimension입니다.
+
+```text
+company_key
+company_name
+investment_count
+first_investment_at
+latest_investment_at
+```
+
+활용:
+
+* 기업별 투자 건수
+* 최초 투자일
+* 최근 투자일
+* 기업 단위 투자 활동 분석
+
+---
+
+### `analytics.dim_date`
+
+투자와 배분 이벤트를 날짜 기준으로 분석하기 위한 Dimension입니다.
+
+```text
+date_id
+year
+month
+day
+```
+
+---
+
+# 9. Fact Tables
+
+## `analytics.fact_investment_allocation`
+
+투자 한 건이 각 출자자에게 어떻게 배분되었는지를 분석합니다.
+
+Grain:
+
+```text
+Investment × Investor
+```
+
+주요 컬럼:
+
+```text
+investment_id
+company_name
+business_date
+investment_amount
+investor_id
+investor_name
+allocation_ratio
+allocated_amount
+investment_status
+```
+
+이를 통해 다음 분석이 가능합니다.
+
+* 기업별 투자 규모
+* 투자별 출자자 구성
+* 출자자별 투자 참여 금액
+* 배분 비율과 실제 배분 금액 비교
+
+---
+
+## `analytics.fact_distribution_allocation`
+
+회수·배분금이 각 출자자에게 어떻게 분배되었는지를 분석합니다.
+
+Grain:
+
+```text
+Distribution × Investor
+```
+
+활용:
+
+* 투자기업별 회수금
+* 출자자별 배분금
+* 배당/회수 유형별 분석
+* 기간별 배분 현황
+
+---
+
+## `analytics.fact_reconciliation_check`
+
+투자/배분 원장의 정합성을 분석 가능한 형태로 제공합니다.
+
+검증 대상:
+
+```text
+Investment Allocation Sum
+Distribution Detail Sum
+Cash Balance
+```
+
+구조:
+
+```text
+expected_amount
+actual_amount
+status
+checked_at
+schema_version
+```
+
+단순 데이터 조회뿐 아니라 **Expected vs Actual 차이를 분석할 수 있도록 Fact 형태로 구성**했습니다.
+
+---
+
+# 10. Demo Analysis
+
+> 아래 결과는 실제 운영 투자 데이터가 아니라 Repository의 Demo Seed를 이용한 재현 가능한 분석 예시입니다.
+
+Demo 데이터는 3명의 출자자로 구성되어 있습니다.
+
+| Investor  | Contribution | Allocation |
+| --------- | -----------: | ---------: |
+| 출자자 A     |        10억 원 |        20% |
+| 출자자 B     |        15억 원 |        30% |
+| 출자자 C     |        25억 원 |        50% |
+| **Total** |    **50억 원** |   **100%** |
+
+기업 X에는 총 **30억 원**을 투자합니다.
+
+투자금은 배분 비율에 따라 다음과 같이 배분됩니다.
+
+| Investor  | Allocated Investment |
+| --------- | -------------------: |
+| 출자자 A     |                 6억 원 |
+| 출자자 B     |                 9억 원 |
+| 출자자 C     |                15억 원 |
+| **Total** |            **30억 원** |
+
+---
+
+# 11. Key Insights
+
+## Insight 1 — 전체 출자금의 60%가 투자 집행됨
+
+```text
+Total Contribution = 50억
+Total Investment   = 30억
+Cash Balance       = 20억
+```
+
+따라서:
+
+```text
+Capital Deployment Rate
+= 30억 / 50억
+= 60%
+```
+
+현재 Demo 시점에서는 전체 출자금 중 **60%가 실제 기업 투자에 집행되고 40%는 현금으로 남아 있습니다.**
+
+---
+
+## Insight 2 — 최대 출자자 비중은 50%
+
+출자자 C의 출자금은 25억 원으로 전체 50억 중 절반을 차지합니다.
+
+```text
+25억 / 50억 = 50%
+```
+
+따라서 출자 구조에서 가장 큰 단일 출자자의 비중은 **50%**입니다.
+
+실제 운영 데이터가 확보되면 출자자 concentration과 자금 의존도를 별도 지표로 모니터링할 수 있습니다.
+
+---
+
+## Insight 3 — 투자 배분 Reconciliation Gap = 0
+
+기업 X의 투자금:
+
+```text
+30억
+```
+
+출자자별 배분:
+
+```text
+6억 + 9억 + 15억 = 30억
+```
+
+따라서:
+
+```text
+Expected = 30억
+Actual   = 30억
+Gap      = 0
+```
+
+Demo 데이터에서는 투자 원장과 출자자별 배분 상세가 일치합니다.
+
+---
+
+# 12. Business Recommendations
+
+### 1. 투자 집행률을 핵심 운영 KPI로 관리
+
+단순 투자 건수보다
+
+```text
+Total Contribution
+Total Investment
+Cash Balance
+Capital Deployment Rate
+```
+
+를 함께 모니터링하면 실제 자금 활용 상태를 더 명확하게 확인할 수 있습니다.
+
+---
+
+### 2. Reconciliation 실패를 우선 처리
+
+투자금 또는 배분금의 상세 합계가 원장과 일치하지 않는 경우 다른 분석보다 먼저 원장 데이터를 확인해야 합니다.
+
+따라서:
+
+```text
+DQ Failure
+    ↓
+Mart Publish 중단
+    ↓
+원장 검토
+    ↓
+재검증
+    ↓
+Analytics Publish
+```
+
+흐름을 유지합니다.
+
+---
+
+### 3. 출자자 Concentration 모니터링
+
+출자자별 비중을 지속적으로 관찰해 특정 출자자 의존도가 높아지는지를 확인할 수 있습니다.
+
+추후 실제 운영 데이터가 충분히 쌓이면 다음 지표로 확장할 수 있습니다.
+
+* Top 1 Investor Share
+* Top 3 Investor Share
+* Investor Concentration
+* 투자기업별 출자자 구성
+
+---
+
+# 13. Tech Stack
+
+| Category           | Stack                  |
+| ------------------ | ---------------------- |
+| Database           | PostgreSQL             |
+| Query / Analysis   | SQL                    |
+| Data Modeling      | Dimension / Fact Mart  |
+| Migration          | Flyway                 |
+| Environment        | Docker, Docker Compose |
+| Automation         | Bash                   |
+| Source Application | Spring Boot            |
+
+---
+
+# 14. Repository Structure
+
+```text
+AlloHub_portfolio/
+│
+├── back/
+│   └── db/
+│       │
+│       ├── analytics/
+│       │   ├── 01_quality_checks.sql
+│       │   ├── 02_analytics_marts.sql
+│       │   └── README.md
+│       │
+│       ├── migration/
+│       │   ├── V1__init.sql
+│       │   └── V2__ledger_quality_constraints.sql
+│       │
+│       ├── seed/
+│       │   ├── demo.sql
+│       │   └── ops.sql
+│       │
+│       └── scripts/
+│           ├── seed-demo.sh
+│           └── seed-ops.sh
+│
+└── README.md
+```
+
+---
+
+# 15. How to Run
+
+## 1. Demo 데이터 적재
+
+```bash
+./back/db/scripts/seed-demo.sh
+```
+
+## 2. Data Quality 확인
+
+```bash
+psql "$DATABASE_URL" \
+  -f back/db/analytics/01_quality_checks.sql
+```
+
+모든 항목이 다음 상태인지 확인합니다.
+
+```text
+status = PASS
+```
+
+## 3. Analytics Mart 생성
+
+```bash
+psql "$DATABASE_URL" \
+  -f back/db/analytics/02_analytics_marts.sql
+```
+
+## 4. Mart 조회
+
+예:
+
+```sql
+SELECT *
+FROM analytics.fact_investment_allocation;
+```
+
+```sql
+SELECT *
+FROM analytics.fact_reconciliation_check;
+```
+
+---
+
+# 16. What I Focused On
+
+이 프로젝트에서 DA 영역은 단순히 SQL로 데이터를 조회하는 데 그치지 않고 다음 흐름을 구현하는 데 집중했습니다.
+
+```text
+Business Problem
+      ↓
+Business Question
+      ↓
+Metric Definition
+      ↓
+Data Quality
+      ↓
+Analytics Modeling
+      ↓
+SQL Analysis
+      ↓
+Insight
+      ↓
+Business Action
+```
+
+특히 금융성 데이터를 분석할 때는 **좋은 차트를 만드는 것보다 분석 대상 데이터가 신뢰 가능한지 먼저 검증하는 과정이 중요하다**고 판단했습니다.
+
+운영 테이블을 직접 분석 결과물로 사용하지 않고 별도의 Analytics View를 구성하여 **운영 데이터와 분석 소비 계층의 책임을 분리**했습니다.
+
+---
+
+# 17. Current Status
+
+| Area                                  | Status              |
+| ------------------------------------- | ------------------- |
+| PostgreSQL OLTP Schema                | Implemented         |
+| Demo Dataset                          | Implemented         |
+| Data Quality SQL                      | Implemented         |
+| Analytics Mart                        | Implemented         |
+| Investment Reconciliation             | Implemented         |
+| Distribution Reconciliation Structure | Implemented         |
+| KPI Definition                        | Defined             |
+| Demo Analysis                         | Reproducible        |
+| Production Dataset Analysis           | Not yet performed   |
+| BI Dashboard                          | Not yet implemented |
+
+실제 운영 데이터나 구현되지 않은 Dashboard 결과를 성과처럼 표현하지 않고, 현재 Repository에서 재현 가능한 범위를 기준으로 작성했습니다.
+
+---
+
+# 18. Next Steps
+
+다음 단계에서는 현재 Mart를 기반으로 분석 범위를 확장할 예정입니다.
+
+```text
+Analytics Mart
+      ↓
+KPI Query
+      ↓
+Python / Pandas EDA
+      ↓
+Time-series / Investor Analysis
+      ↓
+Dashboard
+      ↓
+Business Recommendation
+```
+
+확장 후보:
+
+* 월별 투자금 추이
+* 투자기업별 누적 투자금
+* 출자자별 Portfolio Allocation
+* 투자 집행률 추이
+* 회수·배분률 분석
+* Reconciliation Failure Monitoring
+* Investor Concentration 분석
+* KVIC / KRX / OpenDART 외부 Reference 결합
+
+---
+
+## Summary
+
+**AlloHub DA는 출자·투자·배분 데이터를 단순 조회하는 분석이 아니라, 원장 데이터의 정합성을 먼저 검증하고 이를 Dimension/Fact 기반 Analytics Mart로 변환하여 투자 집행률, 자금 잔액, 출자자 비중, 배분 정합성을 분석할 수 있도록 구성한 프로젝트입니다.**
