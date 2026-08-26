@@ -266,6 +266,88 @@ extract -> raw snapshot -> schema validation -> normalize -> identity matching -
 - https://www.data.go.kr/data/15094775/openapi.do
 - https://opendart.fss.or.kr/intro/main.do
 
+## DA - Data Analytics Specification
+
+> **상태:** IMPLEMENTED (SQL mart baseline) / EXPANDABLE (dashboard & alert rule)
+
+### 1. 분석 목적
+
+DA는 운영 원장 정합성 자체를 다시 계산하는 것이 아니라, 이미 검증된 원장을 기준으로 **투자/배분 성과와 정합성 리스크를 빠르게 탐지하고 우선순위를 정하는 의사결정 레이어**를 제공한다.
+
+핵심 질문은 다음 네 가지다.
+
+1. 어느 기업/출자자 조합에서 배분 오차 또는 잔액 불일치가 반복되는가?
+2. 투자 시점 대비 배분 속도(회수 진행)가 지연되는 포트폴리오는 어디인가?
+3. 특정 기간의 자금 흐름에서 이상치(급격한 증감, 패턴 이탈)가 있는가?
+4. 검토 리소스를 가장 먼저 투입해야 할 위험 케이스는 무엇인가?
+
+### 2. 분석 기준 테이블
+
+- Fact: `analytics.fact_investment_allocation`, `analytics.fact_distribution_allocation`, `analytics.fact_reconciliation_check`
+- Dimension: `analytics.dim_investor`, `analytics.dim_company`, `analytics.dim_date`
+- Join key 원칙: 투자/배분 fact는 `investment_id`, `investor_id`, `company_id`, `date_key` 기준으로 결합한다.
+
+### 3. 핵심 지표 정의
+
+| 지표 | 정의 | 기준/해석 |
+| --- | --- | --- |
+| Allocation Coverage | `allocated_amount / investment_amount` | 1.0 미만은 미배분 잔여가 존재 |
+| Distribution Execution Rate | `distribution_amount / allocated_amount` | 기간 대비 회수 진행률 추적 |
+| Reconciliation Pass Rate | `PASS 건수 / 전체 점검 건수` | 하락 시 데이터/업무 프로세스 동시 점검 |
+| Residual Cash | `investment_amount - sum(distribution_detail)` | 0에 수렴해야 정상 종료 케이스 |
+| Concentration Ratio | 상위 N개 출자자 금액 / 전체 금액 | 과도한 집중은 운영/리스크 검토 대상 |
+
+### 4. 분석 뷰(Report Slice)
+
+- 기간 축: 월/분기/연 단위 추이 (`dim_date`)
+- 엔터티 축: 회사(`dim_company`), 출자자(`dim_investor`), 투자 건(`investment_id`)
+- 품질 축: DQ PASS/FAIL, 불일치 유형, 재처리 이력(run_id 기준)
+
+권장 기본 리포트는 다음과 같다.
+
+1. **포트폴리오 요약:** 투자총액, 배분총액, 잔액, 회수율
+2. **정합성 리스크 보드:** FAIL 규칙, 영향 건수, 영향 금액
+3. **우선 검토 큐:** 잔액 불일치 금액/지속일수 기준 Top-K
+
+### 5. 운영 기준 (SLA/SLO)
+
+- Freshness SLO: 전일 마감 데이터는 D+1 09:00 이전 mart 반영
+- Quality Gate: DQ 결과가 `ALL PASS`가 아니면 리포트 publish 보류
+- Explainability: 모든 수치는 원장 키(`investment_id`, `distribution_id`)까지 drill-down 가능해야 함
+
+### 6. 예시 SQL
+
+```sql
+-- 월별 투자/배분/잔액 추이
+SELECT
+  d.year,
+  d.month,
+  SUM(fia.investment_amount) AS investment_amount,
+  SUM(fda.distribution_amount) AS distribution_amount,
+  SUM(fia.investment_amount) - SUM(fda.distribution_amount) AS residual_amount
+FROM analytics.fact_investment_allocation fia
+JOIN analytics.dim_date d ON d.date_key = fia.date_key
+LEFT JOIN analytics.fact_distribution_allocation fda
+  ON fda.investment_id = fia.investment_id
+ AND fda.date_key = fia.date_key
+GROUP BY d.year, d.month
+ORDER BY d.year, d.month;
+```
+
+```sql
+-- 정합성 FAIL 상위 케이스
+SELECT
+  company_name,
+  investor_name,
+  check_name,
+  check_status,
+  diff_amount
+FROM analytics.fact_reconciliation_check
+WHERE check_status = 'FAIL'
+ORDER BY ABS(diff_amount) DESC
+LIMIT 20;
+```
+
 ## ML - Investment Anomaly Detection Feasibility Specification
 
 > **상태:** CONDITIONAL / PROPOSED / NOT IMPLEMENTED / NOT TESTED
